@@ -1,0 +1,48 @@
+name: Bug report
+description: Reporte um bug no RPG 3D
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: Obrigado por reportar! Preencha as informações abaixo.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Área afetada
+      options:
+        - Editor de cenário
+        - Sessão ao vivo (game)
+        - Dashboard (campanhas/fichas)
+        - API Server
+        - Game Server
+        - Schema / tipos
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Descrição do bug
+      placeholder: O que aconteceu? O que era esperado?
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Passos para reproduzir
+      placeholder: |
+        1. Abrir o editor
+        2. Adicionar um trigger do tipo...
+        3. Clicar em publicar
+        4. Ver o erro
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Ambiente
+      placeholder: |
+        - OS: macOS 15 / Ubuntu 24
+        - Node: 20.x
+        - Browser: Chrome 131

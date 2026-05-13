@@ -1,0 +1,32 @@
+{
+  "name": "@rpg3d/app-dashboard",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev":         "vite --port 3003",
+    "build":       "tsc && vite build",
+    "preview":     "vite preview",
+    "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@rpg3d/schema":      "*",
+    "react":              "^19.2.4",
+    "react-dom":          "^19.2.4",
+    "react-router-dom":   "^7.6.1",
+    "zustand":            "^5.0.3",
+    "tailwindcss":        "^4.2.1",
+    "clsx":               "^2.1.1",
+    "tailwind-merge":     "^3.5.0",
+    "zod":                "^4.3.5",
+    "lucide-react":       "^1.7.0"
+  },
+  "devDependencies": {
+    "@pascal/typescript-config": "*",
+    "@types/node":  "^22.0.0",
+    "@types/react": "19.2.2",
+    "vite":         "^6.3.5",
+    "@vitejs/plugin-react": "^4.5.2",
+    "typescript":   "6.0.2"
+  }
+}

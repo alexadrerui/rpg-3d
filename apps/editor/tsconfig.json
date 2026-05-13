@@ -1,0 +1,15 @@
+{
+  "extends": "@pascal/typescript-config/nextjs.json",
+  "compilerOptions": {
+    "plugins": [{ "name": "next" }],
+    "paths": { "@/*": ["./*"] }
+  },
+  "include": ["**/*.ts", "**/*.tsx", "next-env.d.ts", ".next/types/**/*.ts"],
+  "exclude": ["node_modules"],
+  "references": [
+    { "path": "../../packages/pascal-core" },
+    { "path": "../../packages/pascal-viewer" },
+    { "path": "../../packages/rpg-schema" },
+    { "path": "../../packages/rpg-viewer" }
+  ]
+}

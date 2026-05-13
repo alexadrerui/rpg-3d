@@ -1,0 +1,11 @@
+{
+  "extends": "@pascal/typescript-config/base.json",
+  "compilerOptions": {
+    "outDir":  "./dist",
+    "rootDir": "./src",
+    "module":  "NodeNext",
+    "moduleResolution": "NodeNext"
+  },
+  "include": ["src"],
+  "exclude": ["dist", "node_modules"]
+}

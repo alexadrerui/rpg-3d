@@ -1,0 +1,86 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  password  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  ownedCampaigns Campaign[] @relation("CampaignMaster")
+  characters     Character[]
+  invites        CampaignInvite[]
+}
+
+model Campaign {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  masterId    String
+  systemId    String   // "dnd5e" | "pathfinder" | "custom"
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  master     User             @relation("CampaignMaster", fields: [masterId], references: [id])
+  scenes     Scene[]
+  characters Character[]
+  invites    CampaignInvite[]
+  sessions   Session[]
+}
+
+model Scene {
+  id          String   @id @default(cuid())
+  campaignId  String
+  name        String
+  description String?
+  fileUrl     String   // URL do .rpgscene no object storage
+  version     Int      @default(1)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  campaign Campaign @relation(fields: [campaignId], references: [id])
+}
+
+model Character {
+  id         String   @id @default(cuid())
+  campaignId String
+  userId     String
+  name       String
+  sheetData  Json     // dados da ficha conforme sistema
+  approved   Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  campaign Campaign @relation(fields: [campaignId], references: [id])
+  user     User     @relation(fields: [userId], references: [id])
+}
+
+model CampaignInvite {
+  id         String    @id @default(cuid())
+  campaignId String
+  token      String    @unique @default(cuid())
+  usedBy     String?
+  expiresAt  DateTime
+  createdAt  DateTime  @default(now())
+
+  campaign Campaign @relation(fields: [campaignId], references: [id])
+  user     User?    @relation(fields: [usedBy], references: [id])
+}
+
+model Session {
+  id         String    @id @default(cuid())
+  campaignId String
+  sceneId    String?
+  startedAt  DateTime  @default(now())
+  endedAt    DateTime?
+
+  campaign Campaign @relation(fields: [campaignId], references: [id])
+}

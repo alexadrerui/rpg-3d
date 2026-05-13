@@ -1,0 +1,29 @@
+name: Feature request
+description: Sugira uma nova funcionalidade
+labels: ["enhancement"]
+body:
+  - type: dropdown
+    id: pillar
+    attributes:
+      label: Pilar relacionado
+      options:
+        - "Pilar 1 — Campanha"
+        - "Pilar 2 — Editor de cenário"
+        - "Pilar 3 — Ambiente do jogo"
+        - Infraestrutura / DX
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problema que resolve
+      placeholder: Como mestre, preciso de... / Como jogador, quero...
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Solução proposta
+      placeholder: Descreva como a funcionalidade deveria funcionar

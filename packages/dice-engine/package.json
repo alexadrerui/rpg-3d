@@ -1,0 +1,36 @@
+{
+  "name": "@rpg3d/dice-engine",
+  "version": "0.1.0",
+  "description": "Física de dados 3D (Rapier) + lógica de rolagem com modificadores",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc --project tsconfig.json",
+    "dev": "tsc --project tsconfig.json --watch",
+    "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@rpg3d/schema": "*",
+    "@react-three/rapier": "^2.1.0",
+    "@react-three/fiber": "^9.5.0",
+    "three": "^0.184.0",
+    "react": "^19.2.4"
+  },
+  "devDependencies": {
+    "@pascal/typescript-config": "*",
+    "typescript": "6.0.2"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "three": "^0.184.0"
+  },
+  "license": "MIT"
+}

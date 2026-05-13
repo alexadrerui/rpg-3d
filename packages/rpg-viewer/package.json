@@ -1,0 +1,38 @@
+{
+  "name": "@rpg3d/viewer",
+  "version": "0.1.0",
+  "description": "Pascal viewer estendido com modos RPG (mestre/jogador, câmera isométrica, fog of war)",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc --project tsconfig.json",
+    "dev": "tsc --project tsconfig.json --watch",
+    "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@pascal-app/core": "*",
+    "@pascal-app/viewer": "*",
+    "@rpg3d/schema": "*",
+    "@react-three/fiber": "^9.5.0",
+    "@react-three/drei": "^10.7.7",
+    "three": "^0.184.0",
+    "react": "^19.2.4"
+  },
+  "devDependencies": {
+    "@pascal/typescript-config": "*",
+    "typescript": "6.0.2"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "three": "^0.184.0"
+  },
+  "license": "MIT"
+}
