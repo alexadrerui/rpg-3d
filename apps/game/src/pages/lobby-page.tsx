@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { auth as authApi, campaigns as campaignsApi, setApiToken, type ApiCampaign } from "../lib/api-client"
+import { auth as authApi, campaigns as campaignsApi, characters as charsApi, setApiToken, type ApiCampaign } from "../lib/api-client"
 import { useAuthStore } from "../store/auth-store"
 import { clsx } from "clsx"
 
@@ -31,7 +31,7 @@ export function LobbyPage() {
           />
         ) : (
           <CampaignSelector
-            onEnter={(campaignId, sessionId, sessionToken, isMaster, characterId) => {
+            onEnter={(campaignId, sessionId, sessionToken, isMaster, characterId, avatarType, avatarUrl) => {
               setAuth({
                 token:       sessionToken,
                 userId:      useAuthStore.getState().userId,
@@ -39,6 +39,8 @@ export function LobbyPage() {
                 campaignId,
                 characterId,
                 isMaster,
+                avatarType,
+                avatarUrl,
               })
               navigate(`/session/${sessionId}`, { state: { campaignId } })
             }}
@@ -118,7 +120,7 @@ function LoginForm({ onSuccess }: { onSuccess: (token: string, user: { id: strin
 // ── Campaign selector ──────────────────────────────────────────────────────────
 
 function CampaignSelector({ onEnter, onLogout }: {
-  onEnter:  (campaignId: string, sessionId: string, sessionToken: string, isMaster: boolean, characterId?: string) => void
+  onEnter:  (campaignId: string, sessionId: string, sessionToken: string, isMaster: boolean, characterId?: string, avatarType?: "none" | "image" | "model", avatarUrl?: string) => void
   onLogout: () => void
 }) {
   const [campaigns, setCampaigns] = useState<ApiCampaign[]>([])
@@ -139,7 +141,26 @@ function CampaignSelector({ onEnter, onLogout }: {
     try {
       const { sessionToken, sessionId, isMaster, characterId } =
         await campaignsApi.getSessionToken(campaignId)
-      onEnter(campaignId, sessionId, sessionToken, isMaster, characterId)
+
+      // Fetch avatar from character sheet
+      let avatarType: "none" | "image" | "model" | undefined
+      let avatarUrl: string | undefined
+      if (characterId) {
+        try {
+          const chars = await charsApi.list(campaignId)
+          const char  = chars.find(c => c.id === characterId)
+          const sheet = char?.sheetData as Record<string, unknown> | undefined
+          const av    = sheet?.avatar as { type?: string; url?: string } | undefined
+          if (av?.type === "image" || av?.type === "model") {
+            avatarType = av.type
+            avatarUrl  = av.url
+          } else {
+            avatarType = "none"
+          }
+        } catch { /* silently skip — avatar optional */ }
+      }
+
+      onEnter(campaignId, sessionId, sessionToken, isMaster, characterId, avatarType, avatarUrl)
     } catch (err: unknown) {
       const e = err as { data?: { error?: string } }
       setError(e.data?.error === "CHARACTER_NOT_APPROVED"

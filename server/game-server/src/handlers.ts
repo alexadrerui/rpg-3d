@@ -64,7 +64,7 @@ export function registerHandlers(
     const parsed = EvJoinRoom.safeParse(raw)
     if (!parsed.success) return cb({ ok: false, error: "INVALID_PAYLOAD" })
 
-    const { sessionId, campaignId, characterId } = parsed.data
+    const { sessionId, campaignId, characterId, avatarType, avatarUrl } = parsed.data
     const isMaster = user.isMaster ?? !characterId
 
     const room = await sessions.getOrCreate(sessionId, campaignId, user.sub)
@@ -76,6 +76,8 @@ export function registerHandlers(
       characterId,
       isMaster,
       isOnline:    true,
+      avatarType,
+      avatarUrl,
     })
 
     currentSessionId = sessionId
@@ -88,6 +90,8 @@ export function registerHandlers(
       isMaster,
       isOnline:    true,
       name:        user.name,
+      avatarType,
+      avatarUrl,
     })
 
     // Responde ao entrante com estado atual
@@ -408,12 +412,15 @@ export function registerHandlers(
 
     sessions.leave(room, user.sub)
 
+    const leaving = room.participants.get(user.sub)
     socket.to(currentSessionId).emit("room:participant", {
       userId:      user.sub,
-      characterId: room.participants.get(user.sub)?.characterId,
+      characterId: leaving?.characterId,
       isMaster:    sessions.isMaster(room, user.sub),
       isOnline:    false,
       name:        user.name,
+      avatarType:  leaving?.avatarType,
+      avatarUrl:   leaving?.avatarUrl,
     })
 
     console.log(`[disconnect] ${user.name} saiu da session ${currentSessionId}`)

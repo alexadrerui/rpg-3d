@@ -14,6 +14,7 @@ import type {
   EvRevealNote,
   EvDisarmTrap,
   EvClearFog,
+  EvParticipant,
 } from "./events"
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -22,7 +23,7 @@ import type {
 
 export interface ServerToClientMap {
   "room:joined":       (data: EvRoomJoined)       => void
-  "room:participant":  (data: { userId: string; characterId?: string; isMaster: boolean; isOnline: boolean; name: string }) => void
+  "room:participant":  (data: EvParticipant) => void
   "scene:loaded":      (data: EvSceneLoaded)       => void
   "token:moved":       (data: EvTokenMoved)        => void
   "chat:message":      (data: EvMessageReceived)   => void

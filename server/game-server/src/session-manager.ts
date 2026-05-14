@@ -12,6 +12,8 @@ export type Participant = {
   characterId: string | undefined
   isMaster:    boolean
   isOnline:    boolean
+  avatarType:  "none" | "image" | "model" | undefined
+  avatarUrl:   string | undefined
 }
 
 export type TokenState = {
@@ -113,6 +115,9 @@ export class SessionManager {
       characterId: p.characterId,
       isMaster:    p.isMaster,
       isOnline:    p.isOnline,
+      name:        p.name,
+      avatarType:  p.avatarType,
+      avatarUrl:   p.avatarUrl,
     }))
   }
 

@@ -8,13 +8,14 @@ import { clsx } from "clsx"
 // CharacterPage — ficha de personagem por etapas (wizard de 4 passos)
 // ─────────────────────────────────────────────────────────────────────────────
 
-type Step = "basics" | "attributes" | "background" | "appearance"
+type Step = "basics" | "attributes" | "background" | "appearance" | "avatar"
 
 const STEPS: { key: Step; label: string; icon: string }[] = [
   { key: "basics",     label: "Raça e classe",      icon: "⚔️" },
   { key: "attributes", label: "Atributos",           icon: "🎲" },
   { key: "background", label: "História",            icon: "📖" },
   { key: "appearance", label: "Aparência",           icon: "🎭" },
+  { key: "avatar",     label: "Avatar 3D",           icon: "🧙" },
 ]
 
 export function CharacterPage() {
@@ -101,7 +102,8 @@ export function CharacterPage() {
         {step === "basics"     && <BasicsStep     sheet={sheet} onSave={handleSaveStep} saving={saving} onNext={() => setStep("attributes")} />}
         {step === "attributes" && <AttributesStep sheet={sheet} onSave={handleSaveStep} saving={saving} onNext={() => setStep("background")} onBack={() => setStep("basics")} />}
         {step === "background" && <BackgroundStep sheet={sheet} onSave={handleSaveStep} saving={saving} onNext={() => setStep("appearance")} onBack={() => setStep("attributes")} />}
-        {step === "appearance" && <AppearanceStep sheet={sheet} onSave={handleSaveStep} saving={saving} onBack={() => setStep("background")} />}
+        {step === "appearance" && <AppearanceStep sheet={sheet} onSave={handleSaveStep} saving={saving} onNext={() => setStep("avatar")} onBack={() => setStep("background")} />}
+        {step === "avatar"     && <AvatarStep     sheet={sheet} onSave={handleSaveStep} saving={saving} onBack={() => setStep("appearance")} />}
       </main>
     </div>
   )
@@ -205,7 +207,7 @@ function BackgroundStep({ sheet, onSave, saving, onNext, onBack }: StepProps & {
 }
 
 // ── Etapa 4: Aparência ────────────────────────────────────────────────────────
-function AppearanceStep({ sheet, onSave, saving, onBack }: StepProps & { onBack: () => void }) {
+function AppearanceStep({ sheet, onSave, saving, onBack, onNext }: StepProps & { onBack: () => void; onNext?: () => void }) {
   const [age,    setAge]    = useState(String(sheet.age    ?? ""))
   const [height, setHeight] = useState(String(sheet.height ?? ""))
   const [weight, setWeight] = useState(String(sheet.weight ?? ""))
@@ -231,7 +233,79 @@ function AppearanceStep({ sheet, onSave, saving, onBack }: StepProps & { onBack:
         <textarea value={notes} onChange={e => setNotes(e.target.value)}
           className={clsx(inputCls, "resize-none h-20")} placeholder="Cicatrizes, marcas, tatuagens..." />
       </Field>
-      <StepFooter saving={saving} onSave={() => onSave({ age, height, weight, eyes, hair, skin, appearanceNotes: notes })} onBack={onBack} showBack finalStep />
+      <StepFooter saving={saving} onSave={() => onSave({ age, height, weight, eyes, hair, skin, appearanceNotes: notes })} onNext={onNext} onBack={onBack} showNext showBack nextLabel="Próximo →" />
+    </div>
+  )
+}
+
+// ── Etapa 5: Avatar 3D ────────────────────────────────────────────────────────
+function AvatarStep({ sheet, onSave, saving, onBack }: StepProps & { onBack: () => void }) {
+  const saved      = sheet.avatar as { type?: string; url?: string } | undefined
+  const [type, setType]   = useState<"none" | "image" | "model">(
+    saved?.type === "image" || saved?.type === "model" ? saved.type : "none"
+  )
+  const [url, setUrl] = useState(saved?.url ?? "")
+
+  const handleSave = () => onSave({ avatar: type === "none" ? { type: "none" } : { type, url } })
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-lg font-medium text-neutral-200">Avatar 3D</h2>
+        <p className="text-xs text-neutral-500 mt-1">
+          Escolha como seu personagem aparece no mapa para os outros jogadores.
+        </p>
+      </div>
+
+      {/* Type selector */}
+      <div className="grid grid-cols-3 gap-3">
+        {([
+          { key: "none",  label: "Disco padrão", desc: "Disco colorido com inicial" },
+          { key: "image", label: "Imagem",        desc: "PNG transparente como sprite" },
+          { key: "model", label: "Modelo 3D",     desc: "Arquivo .glb animado"         },
+        ] as const).map(opt => (
+          <button key={opt.key} onClick={() => setType(opt.key)}
+            className={clsx(
+              "text-left p-3 rounded-xl border transition-colors",
+              type === opt.key
+                ? "border-purple-500 bg-purple-950/30 text-purple-300"
+                : "border-neutral-700/50 bg-neutral-900 text-neutral-400 hover:border-neutral-600"
+            )}>
+            <p className="text-sm font-medium">{opt.label}</p>
+            <p className="text-xs opacity-60 mt-0.5">{opt.desc}</p>
+          </button>
+        ))}
+      </div>
+
+      {/* URL input */}
+      {type !== "none" && (
+        <Field label={type === "image" ? "URL da imagem (PNG com transparência)" : "URL do modelo (.glb)"}>
+          <Input value={url} onChange={setUrl} placeholder={type === "image" ? "https://exemplo.com/avatar.png" : "https://exemplo.com/avatar.glb"} />
+        </Field>
+      )}
+
+      {/* Preview */}
+      {type === "image" && url && (
+        <div className="flex items-center gap-4 p-4 bg-neutral-900 rounded-xl border border-neutral-800">
+          <div className="w-20 h-20 rounded-lg overflow-hidden bg-neutral-800 flex items-center justify-center shrink-0"
+            style={{ background: "repeating-conic-gradient(#2a2a2a 0% 25%, #1a1a1a 0% 50%) 0 0 / 16px 16px" }}>
+            <img src={url} alt="preview" className="max-h-full max-w-full object-contain" onError={e => { (e.target as HTMLImageElement).style.display = "none" }} />
+          </div>
+          <div>
+            <p className="text-xs text-neutral-400">Pré-visualização</p>
+            <p className="text-xs text-neutral-600 mt-1">O fundo xadrez indica transparência</p>
+          </div>
+        </div>
+      )}
+
+      {type === "model" && url && (
+        <div className="p-3 bg-neutral-900 rounded-xl border border-neutral-800">
+          <p className="text-xs text-neutral-500">Modelo: <span className="text-neutral-300">{url.split("/").pop()}</span></p>
+          <p className="text-xs text-neutral-700 mt-1">A pré-visualização 3D não está disponível aqui — aparecerá no jogo.</p>
+        </div>
+      )}
+
+      <StepFooter saving={saving} onSave={handleSave} onBack={onBack} showBack finalStep />
     </div>
   )
 }

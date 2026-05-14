@@ -14,10 +14,13 @@ type AuthStore = {
   campaignId:  string
   characterId: string | undefined
   isMaster:    boolean
+  avatarType:  "none" | "image" | "model" | undefined
+  avatarUrl:   string | undefined
 
   setAuth: (data: {
     token: string; userId: string; name: string
     campaignId: string; characterId?: string; isMaster?: boolean
+    avatarType?: "none" | "image" | "model"; avatarUrl?: string
   }) => void
   clear: () => void
 }
@@ -36,6 +39,8 @@ export const useAuthStore = create<AuthStore>()(
       campaignId:  "",
       characterId: undefined,
       isMaster:    false,
+      avatarType:  undefined,
+      avatarUrl:   undefined,
 
       setAuth: (data) => set({
         token:       data.token,
@@ -44,6 +49,8 @@ export const useAuthStore = create<AuthStore>()(
         campaignId:  data.campaignId,
         characterId: data.characterId,
         isMaster:    data.isMaster ?? false,
+        avatarType:  data.avatarType,
+        avatarUrl:   data.avatarUrl,
       }),
 
       clear: () => set({
@@ -53,6 +60,8 @@ export const useAuthStore = create<AuthStore>()(
         campaignId:  "",
         characterId: undefined,
         isMaster:    false,
+        avatarType:  undefined,
+        avatarUrl:   undefined,
       }),
     }),
     { name: "rpg3d-auth" }

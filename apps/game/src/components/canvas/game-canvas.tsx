@@ -1,6 +1,6 @@
 import { Suspense, useEffect, useRef, useState, lazy } from "react"
 import { Canvas }             from "@react-three/fiber"
-import { Grid }               from "@react-three/drei"
+import { Grid, Circle, Text } from "@react-three/drei"
 import * as THREE             from "three"
 import { useViewer }          from "@pascal-app/viewer"
 import { IsoCamera }          from "./iso-camera"
@@ -12,7 +12,7 @@ import { injectSceneIntoPascal, clearPascalScene } from "../../lib/pascal-bridge
 import type {
   ActiveScene, FogCell, TokenPosition, Participant,
 } from "@rpg3d/sync-client"
-import type { EnvironmentConfig } from "@rpg3d/schema"
+import type { EnvironmentConfig, SpawnNode } from "@rpg3d/schema"
 
 // Lazy — Pascal Viewer é pesado, carregado só quando necessário
 const PascalViewer = lazy(() =>
@@ -107,11 +107,14 @@ export function GameCanvas({ activeScene, fogCells, tokens, participants, isMast
                     role={participant?.isMaster ? "master" : "player"}
                     isOwn={isOwn}
                     isMaster={isMaster}
+                    avatarType={participant?.avatarType}
+                    avatarUrl={participant?.avatarUrl}
                     onMove={(pos, rot) => onTokenMove(token.characterId, pos, rot)}
                   />
                 )
               })}
             </Suspense>
+            <NpcSpawnMarkers isMaster={isMaster} />
           </PascalViewer>
         </Suspense>
       </div>
@@ -157,11 +160,14 @@ export function GameCanvas({ activeScene, fogCells, tokens, participants, isMast
                   role={participant?.isMaster ? "master" : "player"}
                   isOwn={isOwn}
                   isMaster={isMaster}
+                  avatarType={participant?.avatarType}
+                  avatarUrl={participant?.avatarUrl}
                   onMove={(pos, rot) => onTokenMove(token.characterId, pos, rot)}
                 />
               )
             })}
           </Suspense>
+          <NpcSpawnMarkers isMaster={isMaster} />
         </Canvas>
       </div>
 
@@ -169,6 +175,74 @@ export function GameCanvas({ activeScene, fogCells, tokens, participants, isMast
       <LoadingOverlay loadState={loadState} pascalReady={pascalReady} activeScene={activeScene} />
       <NoSceneHint activeScene={activeScene} isMaster={isMaster} loadState={loadState} />
     </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Marcadores de spawn NPC/enemy — visíveis apenas ao mestre
+// ─────────────────────────────────────────────────────────────────────────────
+
+const NPC_COLORS: Record<string, string> = {
+  npc:   "#f59e0b",  // amarelo — mesma paleta do token-mesh
+  enemy: "#ef4444",  // vermelho
+  any:   "#6b7280",  // cinza
+}
+
+function NpcSpawnMarkers({ isMaster }: { isMaster: boolean }) {
+  const triggers = useSceneStore(s => s.triggers)
+  if (!isMaster) return null
+
+  const spawns = triggers.filter(
+    (t): t is SpawnNode =>
+      t.type === "trigger_spawn" && (t.forRole === "npc" || t.forRole === "enemy")
+  )
+  if (spawns.length === 0) return null
+
+  return (
+    <>
+      {spawns.map(node => (
+        <NpcMarker key={node.id} node={node} />
+      ))}
+    </>
+  )
+}
+
+function NpcMarker({ node }: { node: SpawnNode }) {
+  const color = NPC_COLORS[node.forRole] ?? NPC_COLORS.any!
+  const label = node.label ?? (node.forRole === "npc" ? "NPC" : "Inimigo")
+
+  return (
+    <group position={[node.position.x, 0, node.position.z]}>
+      {/* Disco base */}
+      <Circle args={[0.45, 32]} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
+        <meshStandardMaterial
+          color={color}
+          emissive={color}
+          emissiveIntensity={0.3}
+          roughness={0.5}
+          opacity={0.75}
+          transparent
+        />
+      </Circle>
+
+      {/* Anel externo (indica spawn, não personagem ativo) */}
+      <Circle args={[0.52, 32]} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]}>
+        <meshStandardMaterial color={color} opacity={0.25} transparent />
+      </Circle>
+
+      {/* Label do spawn */}
+      <Text
+        position={[0, 0.6, 0]}
+        fontSize={0.2}
+        color={color}
+        anchorX="center"
+        anchorY="middle"
+        outlineWidth={0.03}
+        outlineColor="#000000"
+      >
+        {label}
+      </Text>
+    </group>
   )
 }
 

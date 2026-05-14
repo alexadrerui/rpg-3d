@@ -23,6 +23,8 @@ export function SessionPage() {
     characterId: auth.characterId,
     token:       auth.token,
     serverUrl:   SERVER_URL,
+    avatarType:  auth.avatarType,
+    avatarUrl:   auth.avatarUrl,
 
     onTriggerActivated: (ev) => {
       pushTriggerNotification(ev)

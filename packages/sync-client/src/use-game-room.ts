@@ -10,7 +10,7 @@ import type {
 
 // ── Estado Zustand ────────────────────────────────────────────────────────────
 export type GameRoomStatus = "disconnected" | "connecting" | "connected" | "error"
-export type Participant    = { userId: string; characterId?: string; isMaster: boolean; isOnline: boolean; name: string }
+export type Participant    = { userId: string; characterId?: string; isMaster: boolean; isOnline: boolean; name: string; avatarType?: "none" | "image" | "model"; avatarUrl?: string }
 export type TokenPosition  = { characterId: string; userId: string; position: { x: number; y: number; z: number }; rotation: number }
 export type ActiveScene    = { sceneId: string; sceneUrl: string; transitionFx: "fade" | "dissolve" | "none" }
 export type FogCell        = { x: number; z: number }
@@ -36,7 +36,7 @@ export const useRoomStore = create<RoomStore>((set) => ({
   _setStatus:      (status)    => set({ status }),
   _setError:       (lastError) => set({ lastError }),
   _setSession:     ({ sessionId, participants }) =>
-    set({ sessionId, status: "connected", participants: participants.map(p => ({ ...p, name: p.userId })) }),
+    set({ sessionId, status: "connected", participants: participants.map(p => ({ ...p, name: p.name ?? p.userId })) }),
   _setParticipant: (p) =>
     set(s => {
       const next = [...s.participants]; const i = next.findIndex(x => x.userId === p.userId)
@@ -58,6 +58,8 @@ export const useRoomStore = create<RoomStore>((set) => ({
 export type UseGameRoomOptions = {
   sessionId: string; campaignId: string; characterId?: string
   token: string; serverUrl?: string
+  avatarType?: "none" | "image" | "model"
+  avatarUrl?: string
   onSceneLoaded?:      (d: EvSceneLoaded) => void
   onTriggerActivated?: (d: EvTriggerActivated) => void
   onMessage?:          (d: EvMessageReceived) => void
@@ -66,7 +68,7 @@ export type UseGameRoomOptions = {
 }
 
 export function useGameRoom(opts: UseGameRoomOptions) {
-  const { sessionId, campaignId, characterId, token, serverUrl } = opts
+  const { sessionId, campaignId, characterId, token, serverUrl, avatarType, avatarUrl } = opts
   const store  = useRoomStore()
   const cbRef  = useRef(opts); cbRef.current = opts
 
@@ -92,7 +94,7 @@ export function useGameRoom(opts: UseGameRoomOptions) {
 
     socket.connect()
     socket.once("connect", () => {
-      const payload: EvJoinRoom = { sessionId, campaignId, characterId, token }
+      const payload: EvJoinRoom = { sessionId, campaignId, characterId, token, avatarType, avatarUrl }
       socket.emit("room:join", payload, (res) => {
         if (!res.ok) { store._setError(res.error); store._setStatus("error") }
       })
@@ -104,7 +106,7 @@ export function useGameRoom(opts: UseGameRoomOptions) {
         .off("trigger:activated").off("fog:revealed").off("error")
         .off("connect_error").off("ping")
     }
-  }, [sessionId, campaignId, characterId, token, serverUrl])
+  }, [sessionId, campaignId, characterId, token, serverUrl, avatarType, avatarUrl])
 
   const loadScene  = useCallback((data: EvLoadScene) =>
     new Promise<void>((res, rej) => getSocket(serverUrl).emit("scene:load", data, r => r.ok ? res() : rej(new Error(r.error)))), [serverUrl])

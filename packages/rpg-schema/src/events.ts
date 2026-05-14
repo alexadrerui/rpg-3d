@@ -9,24 +9,36 @@ import { Vec3 } from "./base"
 
 // ── SESSÃO ──────────────────────────────────────────────────────────────────
 
+export const AvatarType = z.enum(["none", "image", "model"])
+export type AvatarType = z.infer<typeof AvatarType>
+
 /** C→S: jogador/mestre entra na sala */
 export const EvJoinRoom = z.object({
   campaignId:  z.string().uuid(),
   sessionId:   z.string().uuid(),
   characterId: z.string().optional(),   // undefined = mestre
   token:       z.string(),              // JWT
+  avatarType:  AvatarType.optional(),
+  avatarUrl:   z.string().optional(),   // URL da imagem ou modelo .glb
 })
+
+/** Participante serializado nos eventos de sala */
+export const EvParticipant = z.object({
+  userId:      z.string(),
+  characterId: z.string().optional(),
+  isMaster:    z.boolean(),
+  isOnline:    z.boolean(),
+  name:        z.string().optional(),
+  avatarType:  AvatarType.optional(),
+  avatarUrl:   z.string().optional(),
+})
+export type EvParticipant = z.infer<typeof EvParticipant>
 
 /** S→C: confirmação de entrada com estado atual */
 export const EvRoomJoined = z.object({
   sessionId:    z.string().uuid(),
   sceneId:      z.string().uuid(),
-  participants: z.array(z.object({
-    userId:      z.string(),
-    characterId: z.string().optional(),
-    isMaster:    z.boolean(),
-    isOnline:    z.boolean(),
-  })),
+  participants: z.array(EvParticipant),
 })
 
 // ── CENA ─────────────────────────────────────────────────────────────────────
