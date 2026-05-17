@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react"
 import { useNavigate }         from "react-router-dom"
-import { campaigns as campaignsApi, setApiToken, auth as authApi, type ApiCampaign } from "../lib/api-client"
+import { campaigns as campaignsApi, gameSystems as systemsApi, setApiToken, auth as authApi, type ApiCampaign, type ApiGameSystem } from "../lib/api-client"
 import { useAuthStore }        from "../store/auth-store"
 import { clsx }                from "clsx"
 
@@ -86,9 +86,14 @@ function CampaignList({ name, onLogout }: { name: string; onLogout: () => void }
   const [creating, setCreating]   = useState(false)
   const [newName, setNewName]     = useState("")
   const [showForm, setShowForm]   = useState(false)
+  const [systems, setSystems]     = useState<ApiGameSystem[]>([])
+  const [systemId, setSystemId]   = useState("generic")
 
   useEffect(() => {
     campaignsApi.list().then(setCampaigns).finally(() => setLoading(false))
+    systemsApi.list().then(({ systems: s }) => {
+      setSystems(s.filter(x => x.isPurchased))
+    }).catch(() => {})
   }, [])
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -96,7 +101,7 @@ function CampaignList({ name, onLogout }: { name: string; onLogout: () => void }
     if (!newName.trim()) return
     setCreating(true)
     try {
-      const c = await campaignsApi.create({ name: newName.trim() })
+      const c = await campaignsApi.create({ name: newName.trim(), systemId })
       setCampaigns(prev => [c, ...prev])
       setNewName(""); setShowForm(false)
     } finally { setCreating(false) }
@@ -109,6 +114,9 @@ function CampaignList({ name, onLogout }: { name: string; onLogout: () => void }
         <h1 className="text-sm font-medium text-neutral-300">RPG 3D — Dashboard</h1>
         <div className="flex items-center gap-4 text-xs text-neutral-500">
           <span>{name}</span>
+          <button onClick={() => navigate("/systems")} className="hover:text-neutral-300 transition-colors">
+            Loja de sistemas
+          </button>
           <a href={EDITOR_URL} target="_blank" rel="noreferrer"
             className="hover:text-neutral-300 transition-colors">Editor →</a>
           <button onClick={onLogout} className="hover:text-neutral-300">Sair</button>
@@ -126,15 +134,37 @@ function CampaignList({ name, onLogout }: { name: string; onLogout: () => void }
         </div>
 
         {showForm && (
-          <form onSubmit={handleCreate} className="flex gap-3">
+          <form onSubmit={handleCreate} className="space-y-3">
             <input value={newName} onChange={e => setNewName(e.target.value)}
               placeholder="Nome da campanha..." required
-              className="flex-1 bg-neutral-900 text-neutral-200 text-sm rounded-lg px-3 py-2 border border-neutral-700/50 outline-none focus:border-neutral-500 placeholder-neutral-700"
+              className="w-full bg-neutral-900 text-neutral-200 text-sm rounded-lg px-3 py-2 border border-neutral-700/50 outline-none focus:border-neutral-500 placeholder-neutral-700"
             />
-            <button type="submit" disabled={creating}
-              className="bg-purple-700 hover:bg-purple-600 text-white text-sm px-4 py-2 rounded-lg transition-colors disabled:opacity-50">
-              {creating ? "..." : "Criar"}
-            </button>
+            <div className="flex gap-3 items-end">
+              <div className="flex-1 space-y-1">
+                <label className="text-xs text-neutral-500">Sistema de jogo</label>
+                <select value={systemId} onChange={e => setSystemId(e.target.value)}
+                  className="w-full bg-neutral-900 text-neutral-200 text-sm rounded-lg px-3 py-2 border border-neutral-700/50 outline-none focus:border-neutral-500">
+                  {systems.length === 0
+                    ? <option value="generic">Sistema Genérico (gratuito)</option>
+                    : systems.map(s => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}{s.price === 0 ? " · Gratuito" : ""}
+                      </option>
+                    ))}
+                </select>
+              </div>
+              <button type="submit" disabled={creating}
+                className="bg-purple-700 hover:bg-purple-600 text-white text-sm px-4 py-2 rounded-lg transition-colors disabled:opacity-50 shrink-0">
+                {creating ? "..." : "Criar"}
+              </button>
+            </div>
+            <p className="text-xs text-neutral-600">
+              Quer usar outro sistema?{" "}
+              <button type="button" onClick={() => navigate("/systems")}
+                className="text-purple-400 hover:text-purple-300 underline">
+                Ver loja de sistemas
+              </button>
+            </p>
           </form>
         )}
 

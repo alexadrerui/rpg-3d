@@ -1,56 +1,52 @@
 import { useState, useEffect } from "react"
 import { useParams, useNavigate } from "react-router-dom"
-import { characters as charsApi, setApiToken, type ApiCharacter } from "../lib/api-client"
+import { characters as charsApi, campaigns as campaignsApi, setApiToken, type ApiCharacter } from "../lib/api-client"
 import { useAuthStore } from "../store/auth-store"
-import { clsx } from "clsx"
+import { systemRegistry } from "@rpg3d/game-systems"
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CharacterPage — ficha de personagem por etapas (wizard de 4 passos)
+// CharacterPage — renderiza a ficha do sistema da campanha via registry
 // ─────────────────────────────────────────────────────────────────────────────
-
-type Step = "basics" | "attributes" | "background" | "appearance" | "avatar"
-
-const STEPS: { key: Step; label: string; icon: string }[] = [
-  { key: "basics",     label: "Raça e classe",      icon: "⚔️" },
-  { key: "attributes", label: "Atributos",           icon: "🎲" },
-  { key: "background", label: "História",            icon: "📖" },
-  { key: "appearance", label: "Aparência",           icon: "🎭" },
-  { key: "avatar",     label: "Avatar 3D",           icon: "🧙" },
-]
 
 export function CharacterPage() {
-  const { id: campaignId }     = useParams<{ id: string }>()
-  const { token, setAuth }     = useAuthStore()
-  const navigate               = useNavigate()
+  const { id: campaignId }   = useParams<{ id: string }>()
+  const { token }            = useAuthStore()
+  const navigate             = useNavigate()
   const [character, setCharacter] = useState<ApiCharacter | null>(null)
-  const [loading, setLoading]  = useState(true)
-  const [step, setStep]        = useState<Step>("basics")
-  const [saving, setSaving]    = useState(false)
-  const [saved, setSaved]      = useState(false)
+  const [systemId,  setSystemId]  = useState("generic")
+  const [loading,   setLoading]   = useState(true)
+  const [saving,    setSaving]    = useState(false)
+  const [saved,     setSaved]     = useState(false)
 
-  useEffect(() => { if (token) setApiToken(token) }, [])
+  useEffect(() => { if (token) setApiToken(token) }, [token])
 
   useEffect(() => {
     if (!campaignId) return
-    charsApi.list(campaignId)
-      .then(list => {
-        if (list.length > 0) setCharacter(list[0] ?? null)
-      })
-      .finally(() => setLoading(false))
+    Promise.all([
+      charsApi.list(campaignId),
+      campaignsApi.get(campaignId),
+    ]).then(([chars, campaign]) => {
+      setCharacter(chars[0] ?? null)
+      setSystemId(campaign.systemId ?? "generic")
+    }).finally(() => setLoading(false))
   }, [campaignId])
 
-  const handleSaveStep = async (data: Record<string, unknown>) => {
+  const handleSave = async (patch: Record<string, unknown>) => {
     if (!character) return
     setSaving(true); setSaved(false)
     try {
-      const updated = await charsApi.updateSheet(character.id, data, data.name as string | undefined)
+      const updated = await charsApi.updateSheet(character.id, patch, patch.name as string | undefined)
       setCharacter(updated)
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
     } finally { setSaving(false) }
   }
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center"><p className="text-neutral-500">Carregando...</p></div>
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center">
+      <p className="text-neutral-500">Carregando...</p>
+    </div>
+  )
 
   if (!character) return (
     <div className="min-h-screen flex items-center justify-center">
@@ -61,8 +57,8 @@ export function CharacterPage() {
     </div>
   )
 
-  const currentIdx = STEPS.findIndex(s => s.key === step)
-  const sheet      = character.sheetData as Record<string, unknown>
+  const system = systemRegistry.get(systemId) ?? systemRegistry.get("generic")!
+  const { CharacterSheet } = system
 
   return (
     <div className="min-h-screen">
@@ -71,6 +67,9 @@ export function CharacterPage() {
         <button onClick={() => navigate("/")} className="text-xs text-neutral-500 hover:text-neutral-300">← Dashboard</button>
         <div className="flex items-center gap-2">
           <h1 className="text-sm font-medium text-neutral-300">{character.name}</h1>
+          <span className="text-xs text-neutral-600 border border-neutral-800 px-1.5 py-0.5 rounded-full">
+            {system.name}
+          </span>
           {character.approved
             ? <span className="text-xs bg-green-950/60 text-green-400 border border-green-700/40 px-2 py-0.5 rounded-full">Aprovado</span>
             : <span className="text-xs bg-amber-950/60 text-amber-400 border border-amber-700/40 px-2 py-0.5 rounded-full">Aguardando aprovação</span>}
@@ -78,294 +77,14 @@ export function CharacterPage() {
         {saved && <span className="text-xs text-green-400">✓ Salvo</span>}
       </header>
 
-      {/* Step tabs */}
-      <div className="border-b border-neutral-800">
-        <div className="container mx-auto max-w-2xl px-6 flex gap-1 pt-3">
-          {STEPS.map((s, i) => (
-            <button key={s.key} onClick={() => setStep(s.key)}
-              className={clsx("flex items-center gap-1.5 px-3 py-2 text-xs rounded-t-lg border-b-2 transition-colors",
-                step === s.key
-                  ? "border-purple-500 text-purple-300 bg-purple-950/30"
-                  : i < currentIdx
-                  ? "border-green-700/50 text-green-500"
-                  : "border-transparent text-neutral-500 hover:text-neutral-300")}>
-              <span>{s.icon}</span>
-              <span className="hidden sm:block">{s.label}</span>
-              {i < currentIdx && <span className="text-green-500">✓</span>}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Step content */}
+      {/* Sheet */}
       <main className="container mx-auto max-w-2xl px-6 py-8">
-        {step === "basics"     && <BasicsStep     sheet={sheet} onSave={handleSaveStep} saving={saving} onNext={() => setStep("attributes")} />}
-        {step === "attributes" && <AttributesStep sheet={sheet} onSave={handleSaveStep} saving={saving} onNext={() => setStep("background")} onBack={() => setStep("basics")} />}
-        {step === "background" && <BackgroundStep sheet={sheet} onSave={handleSaveStep} saving={saving} onNext={() => setStep("appearance")} onBack={() => setStep("attributes")} />}
-        {step === "appearance" && <AppearanceStep sheet={sheet} onSave={handleSaveStep} saving={saving} onNext={() => setStep("avatar")} onBack={() => setStep("background")} />}
-        {step === "avatar"     && <AvatarStep     sheet={sheet} onSave={handleSaveStep} saving={saving} onBack={() => setStep("appearance")} />}
+        <CharacterSheet
+          data={character.sheetData as Record<string, unknown>}
+          onSave={handleSave}
+          saving={saving}
+        />
       </main>
     </div>
   )
-}
-
-// ── Etapa 1: Raça e classe ─────────────────────────────────────────────────────
-function BasicsStep({ sheet, onSave, saving, onNext }: StepProps) {
-  const [race,  setRace]  = useState(String(sheet.race  ?? ""))
-  const [klass, setKlass] = useState(String(sheet.class ?? ""))
-  const [name,  setName]  = useState(String(sheet.characterName ?? ""))
-  const [level, setLevel] = useState(Number(sheet.level ?? 1))
-
-  const RACES   = ["Humano","Elfo","Anão","Halfling","Draconato","Gnomo","Meio-Elfo","Meio-Orc","Tiefling"]
-  const CLASSES = ["Bárbaro","Bardo","Clérigo","Druida","Guerreiro","Monge","Paladino","Patrulheiro","Ladino","Feiticeiro","Bruxo","Mago"]
-
-  return (
-    <div className="space-y-6">
-      <h2 className="text-lg font-medium text-neutral-200">Raça e classe</h2>
-      <Field label="Nome do personagem">
-        <Input value={name} onChange={setName} placeholder="Aragorn, Hermione..." />
-      </Field>
-      <div className="grid grid-cols-2 gap-4">
-        <Field label="Raça">
-          <Select value={race} onChange={setRace} options={RACES} placeholder="Escolher..." />
-        </Field>
-        <Field label="Classe">
-          <Select value={klass} onChange={setKlass} options={CLASSES} placeholder="Escolher..." />
-        </Field>
-      </div>
-      <Field label="Nível">
-        <input type="number" min={1} max={20} value={level} onChange={e => setLevel(Number(e.target.value))}
-          className={inputCls} />
-      </Field>
-      <StepFooter saving={saving} onNext={() => onSave({ race, class: klass, characterName: name, level, name })} nextLabel="Salvar e continuar" showNext onNext2={onNext} />
-    </div>
-  )
-}
-
-// ── Etapa 2: Atributos ────────────────────────────────────────────────────────
-function AttributesStep({ sheet, onSave, saving, onNext, onBack }: StepProps & { onBack: () => void }) {
-  const ATTRS = ["strength","dexterity","constitution","intelligence","wisdom","charisma"] as const
-  const LABELS: Record<string, string> = { strength:"Força", dexterity:"Destreza", constitution:"Constituição", intelligence:"Inteligência", wisdom:"Sabedoria", charisma:"Carisma" }
-  const [values, setValues] = useState<Record<string, number>>(
-    Object.fromEntries(ATTRS.map(a => [a, Number(sheet[a] ?? 10)]))
-  )
-
-  const set = (attr: string, v: number) => setValues(prev => ({ ...prev, [attr]: v }))
-  const modifier = (v: number) => Math.floor((v - 10) / 2)
-  const fmt = (m: number) => m >= 0 ? `+${m}` : String(m)
-
-  return (
-    <div className="space-y-6">
-      <h2 className="text-lg font-medium text-neutral-200">Atributos</h2>
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-        {ATTRS.map(attr => (
-          <div key={attr} className="bg-neutral-900 border border-neutral-800 rounded-xl p-4 text-center">
-            <p className="text-xs text-neutral-500 mb-2">{LABELS[attr]}</p>
-            <input type="number" min={1} max={20} value={values[attr]}
-              onChange={e => set(attr, Number(e.target.value))}
-              className="w-16 text-center text-2xl font-bold text-neutral-100 bg-transparent outline-none border-b border-neutral-700 focus:border-purple-500"
-            />
-            <p className="text-sm text-purple-400 mt-1">{fmt(modifier(values[attr]!))}</p>
-          </div>
-        ))}
-      </div>
-      <StepFooter saving={saving} onSave={() => onSave(values)} onNext={onNext} onBack={onBack} showNext showBack />
-    </div>
-  )
-}
-
-// ── Etapa 3: História ─────────────────────────────────────────────────────────
-function BackgroundStep({ sheet, onSave, saving, onNext, onBack }: StepProps & { onBack: () => void }) {
-  const [background, setBackground] = useState(String(sheet.background ?? ""))
-  const [personality, setPersonality] = useState(String(sheet.personality ?? ""))
-  const [bonds, setBonds]   = useState(String(sheet.bonds ?? ""))
-  const [flaws, setFlaws]   = useState(String(sheet.flaws ?? ""))
-
-  return (
-    <div className="space-y-6">
-      <h2 className="text-lg font-medium text-neutral-200">História e background</h2>
-      <Field label="Background">
-        <Select value={background} onChange={setBackground}
-          options={["Acólito","Criminoso","Herói do Povo","Nobre","Sábio","Soldado","Marinheiro","Forasteiro","Herói de Guilda","Ermitão"]}
-          placeholder="Escolher..." />
-      </Field>
-      <Field label="Traços de personalidade">
-        <textarea value={personality} onChange={e => setPersonality(e.target.value)}
-          className={clsx(inputCls, "resize-none h-20")} placeholder="Como você age e se comporta..." />
-      </Field>
-      <Field label="Vínculos">
-        <textarea value={bonds} onChange={e => setBonds(e.target.value)}
-          className={clsx(inputCls, "resize-none h-16")} placeholder="O que é mais importante para você..." />
-      </Field>
-      <Field label="Defeitos">
-        <textarea value={flaws} onChange={e => setFlaws(e.target.value)}
-          className={clsx(inputCls, "resize-none h-16")} placeholder="Sua fraqueza ou vício..." />
-      </Field>
-      <StepFooter saving={saving} onSave={() => onSave({ background, personality, bonds, flaws })} onNext={onNext} onBack={onBack} showNext showBack />
-    </div>
-  )
-}
-
-// ── Etapa 4: Aparência ────────────────────────────────────────────────────────
-function AppearanceStep({ sheet, onSave, saving, onBack, onNext }: StepProps & { onBack: () => void; onNext?: () => void }) {
-  const [age,    setAge]    = useState(String(sheet.age    ?? ""))
-  const [height, setHeight] = useState(String(sheet.height ?? ""))
-  const [weight, setWeight] = useState(String(sheet.weight ?? ""))
-  const [eyes,   setEyes]   = useState(String(sheet.eyes   ?? ""))
-  const [hair,   setHair]   = useState(String(sheet.hair   ?? ""))
-  const [skin,   setSkin]   = useState(String(sheet.skin   ?? ""))
-  const [notes,  setNotes]  = useState(String(sheet.appearanceNotes ?? ""))
-
-  return (
-    <div className="space-y-6">
-      <h2 className="text-lg font-medium text-neutral-200">Aparência</h2>
-      <div className="grid grid-cols-3 gap-4">
-        <Field label="Idade"><Input value={age}    onChange={setAge}    placeholder="30 anos" /></Field>
-        <Field label="Altura"><Input value={height} onChange={setHeight} placeholder="1,80m" /></Field>
-        <Field label="Peso"><Input value={weight} onChange={setWeight} placeholder="80kg" /></Field>
-      </div>
-      <div className="grid grid-cols-3 gap-4">
-        <Field label="Olhos"><Input value={eyes} onChange={setEyes} placeholder="Azuis" /></Field>
-        <Field label="Cabelo"><Input value={hair} onChange={setHair} placeholder="Preto" /></Field>
-        <Field label="Pele"><Input value={skin}  onChange={setSkin}  placeholder="Clara" /></Field>
-      </div>
-      <Field label="Notas adicionais">
-        <textarea value={notes} onChange={e => setNotes(e.target.value)}
-          className={clsx(inputCls, "resize-none h-20")} placeholder="Cicatrizes, marcas, tatuagens..." />
-      </Field>
-      <StepFooter saving={saving} onSave={() => onSave({ age, height, weight, eyes, hair, skin, appearanceNotes: notes })} onNext={onNext} onBack={onBack} showNext showBack nextLabel="Próximo →" />
-    </div>
-  )
-}
-
-// ── Etapa 5: Avatar 3D ────────────────────────────────────────────────────────
-function AvatarStep({ sheet, onSave, saving, onBack }: StepProps & { onBack: () => void }) {
-  const saved      = sheet.avatar as { type?: string; url?: string } | undefined
-  const [type, setType]   = useState<"none" | "image" | "model">(
-    saved?.type === "image" || saved?.type === "model" ? saved.type : "none"
-  )
-  const [url, setUrl] = useState(saved?.url ?? "")
-
-  const handleSave = () => onSave({ avatar: type === "none" ? { type: "none" } : { type, url } })
-
-  return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-lg font-medium text-neutral-200">Avatar 3D</h2>
-        <p className="text-xs text-neutral-500 mt-1">
-          Escolha como seu personagem aparece no mapa para os outros jogadores.
-        </p>
-      </div>
-
-      {/* Type selector */}
-      <div className="grid grid-cols-3 gap-3">
-        {([
-          { key: "none",  label: "Disco padrão", desc: "Disco colorido com inicial" },
-          { key: "image", label: "Imagem",        desc: "PNG transparente como sprite" },
-          { key: "model", label: "Modelo 3D",     desc: "Arquivo .glb animado"         },
-        ] as const).map(opt => (
-          <button key={opt.key} onClick={() => setType(opt.key)}
-            className={clsx(
-              "text-left p-3 rounded-xl border transition-colors",
-              type === opt.key
-                ? "border-purple-500 bg-purple-950/30 text-purple-300"
-                : "border-neutral-700/50 bg-neutral-900 text-neutral-400 hover:border-neutral-600"
-            )}>
-            <p className="text-sm font-medium">{opt.label}</p>
-            <p className="text-xs opacity-60 mt-0.5">{opt.desc}</p>
-          </button>
-        ))}
-      </div>
-
-      {/* URL input */}
-      {type !== "none" && (
-        <Field label={type === "image" ? "URL da imagem (PNG com transparência)" : "URL do modelo (.glb)"}>
-          <Input value={url} onChange={setUrl} placeholder={type === "image" ? "https://exemplo.com/avatar.png" : "https://exemplo.com/avatar.glb"} />
-        </Field>
-      )}
-
-      {/* Preview */}
-      {type === "image" && url && (
-        <div className="flex items-center gap-4 p-4 bg-neutral-900 rounded-xl border border-neutral-800">
-          <div className="w-20 h-20 rounded-lg overflow-hidden bg-neutral-800 flex items-center justify-center shrink-0"
-            style={{ background: "repeating-conic-gradient(#2a2a2a 0% 25%, #1a1a1a 0% 50%) 0 0 / 16px 16px" }}>
-            <img src={url} alt="preview" className="max-h-full max-w-full object-contain" onError={e => { (e.target as HTMLImageElement).style.display = "none" }} />
-          </div>
-          <div>
-            <p className="text-xs text-neutral-400">Pré-visualização</p>
-            <p className="text-xs text-neutral-600 mt-1">O fundo xadrez indica transparência</p>
-          </div>
-        </div>
-      )}
-
-      {type === "model" && url && (
-        <div className="p-3 bg-neutral-900 rounded-xl border border-neutral-800">
-          <p className="text-xs text-neutral-500">Modelo: <span className="text-neutral-300">{url.split("/").pop()}</span></p>
-          <p className="text-xs text-neutral-700 mt-1">A pré-visualização 3D não está disponível aqui — aparecerá no jogo.</p>
-        </div>
-      )}
-
-      <StepFooter saving={saving} onSave={handleSave} onBack={onBack} showBack finalStep />
-    </div>
-  )
-}
-
-// ── Shared types and helpers ───────────────────────────────────────────────────
-type StepProps = {
-  sheet:   Record<string, unknown>
-  onSave:  (data: Record<string, unknown>) => Promise<void>
-  onNext?: () => void
-  saving:  boolean
-}
-
-function StepFooter({ saving, onSave, onNext, onBack, showNext, showBack, finalStep, nextLabel, onNext2 }: {
-  saving: boolean; onSave?: () => void; onNext?: () => void; onBack?: () => void
-  showNext?: boolean; showBack?: boolean; finalStep?: boolean; nextLabel?: string; onNext2?: () => void
-}) {
-  const handleNext = async () => {
-    if (onSave) await onSave()
-    if (onNext) onNext()
-    if (onNext2) onNext2()
-  }
-
-  return (
-    <div className="flex items-center justify-between pt-4 border-t border-neutral-800">
-      {showBack ? (
-        <button onClick={onBack} className="text-sm text-neutral-500 hover:text-neutral-300 transition-colors">← Voltar</button>
-      ) : <div />}
-      <div className="flex gap-3">
-        {onSave && !showNext && (
-          <button onClick={onSave} disabled={saving}
-            className="bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-sm px-4 py-2 rounded-lg transition-colors disabled:opacity-50">
-            {saving ? "Salvando..." : finalStep ? "✓ Finalizar ficha" : "Salvar"}
-          </button>
-        )}
-        {showNext && (
-          <button onClick={handleNext} disabled={saving}
-            className="bg-purple-700 hover:bg-purple-600 text-white text-sm px-4 py-2 rounded-lg transition-colors disabled:opacity-50">
-            {saving ? "Salvando..." : nextLabel ?? "Próximo →"}
-          </button>
-        )}
-      </div>
-    </div>
-  )
-}
-
-const inputCls = "w-full bg-neutral-900 text-neutral-200 text-sm rounded-lg px-3 py-2 border border-neutral-700/50 outline-none focus:border-neutral-500 placeholder-neutral-700"
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return <div className="space-y-1"><label className="text-xs text-neutral-500">{label}</label>{children}</div>
-}
-function Input({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
-  return <input value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} className={inputCls} />
-}
-function Select({ value, onChange, options, placeholder }: { value: string; onChange: (v: string) => void; options: string[]; placeholder?: string }) {
-  return (
-    <select value={value} onChange={e => onChange(e.target.value)} className={inputCls}>
-      {placeholder && <option value="" disabled>{placeholder}</option>}
-      {options.map(o => <option key={o} value={o}>{o}</option>)}
-    </select>
-  )
-}
-function clsx(...classes: (string | boolean | undefined)[]) {
-  return classes.filter(Boolean).join(" ")
 }

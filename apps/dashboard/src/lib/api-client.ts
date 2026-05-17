@@ -165,3 +165,22 @@ export const invites = {
       `/invites/${token}/accept`, { method: "POST" }
     ),
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Game Systems
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type ApiGameSystem = {
+  id: string; name: string; description: string
+  price: number; version: string; tags: string[]
+  thumbnail?: string; isActive: boolean
+  isPurchased: boolean
+}
+
+export const gameSystems = {
+  list: () =>
+    apiFetch<{ credits: number; systems: ApiGameSystem[] }>("/systems"),
+
+  purchase: (systemId: string) =>
+    apiFetch<{ ok: boolean; credits: number }>(`/systems/${systemId}/purchase`, { method: "POST" }),
+}

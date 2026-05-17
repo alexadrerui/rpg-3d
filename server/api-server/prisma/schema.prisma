@@ -8,16 +8,20 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String
-  password  String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                  String   @id @default(cuid())
+  email               String   @unique
+  name                String
+  password            String
+  credits             Int      @default(1000)
+  registrationIpHash  String?  // HMAC-SHA256 do IP de cadastro — LGPD art.12 (dado anonimizado)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
-  ownedCampaigns Campaign[] @relation("CampaignMaster")
-  characters     Character[]
-  invites        CampaignInvite[]
+  ownedCampaigns  Campaign[]           @relation("CampaignMaster")
+  characters      Character[]
+  invites         CampaignInvite[]
+  uploadedAssets  Asset[]
+  systemPurchases UserSystemPurchase[]
 }
 
 model Campaign {
@@ -34,6 +38,7 @@ model Campaign {
   characters Character[]
   invites    CampaignInvite[]
   sessions   Session[]
+  assets     Asset[]
 }
 
 model Scene {
@@ -83,4 +88,48 @@ model Session {
   endedAt    DateTime?
 
   campaign Campaign @relation(fields: [campaignId], references: [id])
+}
+
+model Asset {
+  id          String   @id @default(cuid())
+  campaignId  String
+  uploadedBy  String
+  fileName    String
+  mimeType    String
+  sizeBytes   Int?
+  publicUrl   String
+  storageKey  String
+  confirmed   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  campaign Campaign @relation(fields: [campaignId], references: [id])
+  uploader User     @relation(fields: [uploadedBy], references: [id])
+}
+
+// ── Game Systems ───────────────────────────────────────────────────────────────
+
+model GameSystemCatalog {
+  id          String   @id        // "dnd5e", "generic"
+  name        String
+  description String
+  price       Int      @default(0)         // em créditos internos (0 = gratuito)
+  version     String   @default("1.0.0")
+  thumbnail   String?
+  tags        String[]
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  purchases   UserSystemPurchase[]
+}
+
+model UserSystemPurchase {
+  id          String   @id @default(cuid())
+  userId      String
+  systemId    String
+  purchasedAt DateTime @default(now())
+
+  user   User              @relation(fields: [userId],   references: [id], onDelete: Cascade)
+  system GameSystemCatalog @relation(fields: [systemId], references: [id])
+
+  @@unique([userId, systemId])
 }

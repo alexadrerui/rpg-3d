@@ -3,14 +3,20 @@ import { CampaignsPage }      from "./pages/campaigns-page"
 import { CampaignDetailPage } from "./pages/campaign-detail-page"
 import { CharacterPage }      from "./pages/character-page"
 import { InvitePage }         from "./pages/invite-page"
+import { SystemStorePage }    from "./pages/system-store-page"
+import { CookieBanner }       from "./components/cookie-banner"
 
 export function App() {
   return (
-    <Routes>
-      <Route path="/"                        element={<CampaignsPage />} />
-      <Route path="/campaign/:id"            element={<CampaignDetailPage />} />
-      <Route path="/campaign/:id/character"  element={<CharacterPage />} />
-      <Route path="/invite/:token"           element={<InvitePage />} />
-    </Routes>
+    <>
+      <Routes>
+        <Route path="/"                        element={<CampaignsPage />} />
+        <Route path="/campaign/:id"            element={<CampaignDetailPage />} />
+        <Route path="/campaign/:id/character"  element={<CharacterPage />} />
+        <Route path="/invite/:token"           element={<InvitePage />} />
+        <Route path="/systems"                 element={<SystemStorePage />} />
+      </Routes>
+      <CookieBanner />
+    </>
   )
 }
