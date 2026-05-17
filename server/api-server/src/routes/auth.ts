@@ -4,6 +4,7 @@ import { z }         from "zod"
 import { prisma }    from "../lib/prisma.js"
 import { signToken } from "../lib/jwt.js"
 import { requireAuth } from "../middleware/auth.js"
+import { extractIp, hashIp } from "../lib/ip-hash.js"
 
 export const authRouter = Router()
 
@@ -23,8 +24,12 @@ authRouter.post("/register", async (req, res) => {
   const existing = await prisma.user.findUnique({ where: { email } })
   if (existing) { res.status(409).json({ error: "EMAIL_TAKEN" }); return }
 
-  const hash = await bcrypt.hash(password, 12)
-  const user = await prisma.user.create({ data: { email, name, password: hash } })
+  const hash             = await bcrypt.hash(password, 12)
+  const rawIp            = extractIp(req)
+  const registrationIpHash = rawIp ? hashIp(rawIp) : null
+  const user = await prisma.user.create({
+    data: { email, name, password: hash, registrationIpHash },
+  })
 
   const token = signToken({ sub: user.id, name: user.name, email: user.email })
   res.status(201).json({ token, user: { id: user.id, name: user.name, email: user.email } })

@@ -123,6 +123,38 @@ bun dev:servers     # api :4000 + game-server :4001
 
 ---
 
+## Checklist de produção
+
+### Variáveis de ambiente obrigatórias
+
+```bash
+# server/api-server/.env
+DATABASE_URL="postgresql://user:pass@host:5432/rpg3d"
+JWT_SECRET="string-longa-e-aleatoria"          # min. 32 chars
+SERVER_SECRET="string-longa-e-aleatoria"        # min. 32 chars
+IP_HASH_SALT="string-longa-e-aleatoria"         # ⚠️ não alterar após primeiro cadastro
+
+# apps/dashboard/.env
+VITE_GA_MEASUREMENT_ID="G-XXXXXXXXXX"           # Google Analytics 4
+```
+
+> **`IP_HASH_SALT`** — usado para anonimizar o IP de cadastro (LGPD art. 12).
+> Gere com `openssl rand -hex 32`. **Nunca altere após usuários já cadastrados**,
+> pois os hashes existentes ficam incomparáveis.
+>
+> **`VITE_GA_MEASUREMENT_ID`** — o banner de consentimento no dashboard
+> só carrega o script do GA4 após aceite explícito do usuário.
+
+### Após subir o banco pela primeira vez
+
+```bash
+cd server/api-server
+bun db:push        # aplica o schema (inclui registrationIpHash e créditos)
+bun db:generate    # regenera o Prisma Client
+```
+
+---
+
 ## Contribuindo
 
 Issues e PRs são bem-vindos. Veja os templates em `.github/`.

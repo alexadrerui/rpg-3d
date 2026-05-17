@@ -327,6 +327,7 @@ O projeto usa **Zod v4** (breaking changes em relação ao v3):
 | game-server: rooms, session state, Redis opcional | `server/game-server/src/session-manager.ts` |
 | game-server: todos os handlers WS implementados | `server/game-server/src/handlers.ts` |
 | game-server: detecção de colisão com triggers | `server/game-server/src/collision.ts` |
+| game-server: fog modes circle/raycast/room + extração de paredes Pascal | `server/game-server/src/collision.ts` |
 | api-server: auth JWT + bcrypt | `server/api-server/src/routes/auth.ts` |
 | api-server: CRUD campanhas + convites + session token | `server/api-server/src/routes/campaigns.ts` |
 | api-server: CRUD cenas + endpoint /url server-to-server | `server/api-server/src/routes/scenes.ts` |
@@ -358,7 +359,6 @@ O projeto usa **Zod v4** (breaking changes em relação ao v3):
 | Sessão salva / log de sessão | `Session` model existe no Prisma mas não há endpoint de log |
 | Física de dados 3D (Rapier) | `dice-engine` tem só lógica matemática; animação 3D com Rapier não implementada |
 | Modo first_person | `CameraConfig.mode = "first_person"` está no schema mas não na câmera |
-| Fog mode "raycast" e "room" | Só "circle" está implementado no game-server/collision.ts |
 
 ---
 
