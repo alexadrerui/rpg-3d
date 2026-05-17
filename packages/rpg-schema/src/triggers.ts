@@ -1,5 +1,5 @@
 import { z } from "zod"
-import { BaseRpgNode, Vec3, ColorHex, AssetRef } from "./base"
+import { BaseRpgNode, Vec3, ColorHex, AssetRef } from "./base.js"
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ZONA BASE — toda trigger é uma zona no espaço 3D

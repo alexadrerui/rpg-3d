@@ -37,6 +37,12 @@ coverage/
 # ── Prisma ────────────────────────────────────────────────────────────────────
 server/api-server/prisma/migrations/
 
+# ── TypeScript build cache ────────────────────────────────────────────────────
+*.tsbuildinfo
+
+# ── Next.js generated ─────────────────────────────────────────────────────────
+apps/editor/next-env.d.ts
+
 # ── RPG 3D ───────────────────────────────────────────────────────────────────
 *.rpgscene.local
 apps/_pascal-reference/

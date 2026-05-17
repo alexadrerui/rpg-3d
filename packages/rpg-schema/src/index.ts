@@ -1,9 +1,9 @@
 // ─── rpg-schema — contrato central do projeto RPG 3D ─────────────────────────
 // Importado por: editor · game · dashboard · game-server · api-server
 
-export * from "./base"
-export * from "./triggers"
-export * from "./environment"
-export * from "./scene"
-export * from "./events"
-export * from "./socket-types"
+export * from "./base.js"
+export * from "./triggers.js"
+export * from "./environment.js"
+export * from "./scene.js"
+export * from "./events.js"
+export * from "./socket-types.js"

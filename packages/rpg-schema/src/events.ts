@@ -1,6 +1,6 @@
 import { z } from "zod"
-import { AnyTriggerNode } from "./triggers"
-import { Vec3 } from "./base"
+import { AnyTriggerNode } from "./triggers.js"
+import { Vec3 } from "./base.js"
 
 // ─────────────────────────────────────────────────────────────────────────────
 // EVENTOS WEBSOCKET — contrato entre game-server e clientes
@@ -142,6 +142,36 @@ export const EvDisarmTrap = z.object({
   triggerId: z.string(),
 })
 
+// ── TOKENS NPC / ENEMY ───────────────────────────────────────────────────────
+
+export const NpcRole = z.enum(["npc", "enemy"])
+export type  NpcRole = z.infer<typeof NpcRole>
+
+/** C→S (mestre): spawna um token NPC/enemy no mapa */
+export const EvSpawnNpc = z.object({
+  role:       NpcRole,
+  name:       z.string().min(1).max(80),
+  position:   Vec3,
+  rotation:   z.number().default(0),
+  avatarType: AvatarType.optional(),
+  avatarUrl:  z.string().optional(),
+})
+
+/** S→C: broadcast — NPC foi spawnado */
+export const EvNpcSpawned = EvSpawnNpc.extend({
+  tokenId: z.string().uuid(),   // gerado pelo server
+})
+
+/** C→S (mestre): remove um NPC do mapa */
+export const EvDespawnNpc = z.object({
+  tokenId: z.string().uuid(),
+})
+
+/** S→C: broadcast — NPC foi removido */
+export const EvNpcDespawned = z.object({
+  tokenId: z.string().uuid(),
+})
+
 // ── FOG OF WAR ───────────────────────────────────────────────────────────────
 
 /** S→C: células de fog reveladas (delta, não o mapa inteiro) */
@@ -162,6 +192,8 @@ export const ServerToClientEvents = {
   "room:joined":         EvRoomJoined,
   "scene:loaded":        EvSceneLoaded,
   "token:moved":         EvTokenMoved,
+  "npc:spawned":         EvNpcSpawned,
+  "npc:despawned":       EvNpcDespawned,
   "chat:message":        EvMessageReceived,
   "dice:result":         EvDiceResult,
   "trigger:activated":   EvTriggerActivated,
@@ -172,6 +204,8 @@ export const ClientToServerEvents = {
   "room:join":       EvJoinRoom,
   "scene:load":      EvLoadScene,
   "token:move":      EvMoveToken,
+  "npc:spawn":       EvSpawnNpc,
+  "npc:despawn":     EvDespawnNpc,
   "chat:send":       EvSendMessage,
   "dice:roll":       EvRollDice,
   "note:reveal":     EvRevealNote,
@@ -192,6 +226,11 @@ export type EvDiceResult        = z.infer<typeof EvDiceResult>
 export type EvTriggerActivated  = z.infer<typeof EvTriggerActivated>
 export type EvRevealNote        = z.infer<typeof EvRevealNote>
 export type EvDisarmTrap        = z.infer<typeof EvDisarmTrap>
+export type EvClearFog          = z.infer<typeof EvClearFog>
 export type EvFogRevealed       = z.infer<typeof EvFogRevealed>
+export type EvSpawnNpc          = z.infer<typeof EvSpawnNpc>
+export type EvNpcSpawned        = z.infer<typeof EvNpcSpawned>
+export type EvDespawnNpc        = z.infer<typeof EvDespawnNpc>
+export type EvNpcDespawned      = z.infer<typeof EvNpcDespawned>
 export type DiceFace            = z.infer<typeof DiceFace>
 export type ChatChannel         = z.infer<typeof ChatChannel>

@@ -9,6 +9,10 @@ import { RpgToolbarSlot }        from "./toolbar/rpg-toolbar-slot"
 import { TriggerSidebarTab }     from "./triggers/trigger-sidebar-tab"
 import { EnvironmentSidebarTab } from "./environment/environment-sidebar-tab"
 import { downloadScene }   from "../lib/export-scene"
+import { uploadSceneFile }  from "../lib/upload-asset"
+import { AssetSidebarTab }  from "./assets/asset-sidebar-tab"
+import { useAssetStore }     from "../store/asset-store"
+import { useEditorAuthStore } from "../store/auth-store"
 import type { RpgSceneFile } from "@rpg3d/schema"
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -65,8 +69,8 @@ export function EditorRoot() {
     } catch { /* ignore */ }
   }, [])
 
-  // ── Publicar → gera .rpgscene para download ───────────────────────────────
-  const handlePublish = useCallback(() => {
+  // ── Publicar → upload para storage (se conectado) ou download local ──────
+  const handlePublish = useCallback(async () => {
     if (publishedRef.current) return
     publishedRef.current = true
 
@@ -76,12 +80,15 @@ export function EditorRoot() {
       rootNodeIds: sceneState.rootNodeIds,
     }
 
+    const { models, textures, audio } = useAssetStore.getState()
+    const { token, apiUrl, campaignId, sceneName } = useEditorAuthStore.getState()
+
     const scene: RpgSceneFile = {
       $schema: "rpg-scene/v1",
       meta: {
         id:         crypto.randomUUID(),
-        campaignId: crypto.randomUUID(),
-        name:       "Cenário exportado",
+        campaignId: campaignId || crypto.randomUUID(),
+        name:       sceneName || "Cenário exportado",
         createdAt:  new Date().toISOString(),
         updatedAt:  new Date().toISOString(),
         createdBy:  "editor",
@@ -92,14 +99,33 @@ export function EditorRoot() {
         nodes:       graph.nodes,
         rootNodeIds: graph.rootNodeIds,
       },
-      assets:      { models: [], textures: [], audio: [] },
+      assets:      { models, textures, audio },
       triggers,
       environment: env,
     }
 
-    downloadScene(scene)
+    if (token && campaignId) {
+      try {
+        const fileUrl = await uploadSceneFile(
+          apiUrl, token, campaignId,
+          JSON.stringify(scene, null, 2),
+          scene.meta.name,
+        )
+        await fetch(`${apiUrl}/scenes`, {
+          method:  "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body:    JSON.stringify({ campaignId, name: scene.meta.name, fileUrl }),
+        })
+      } catch {
+        // falha no upload → fallback para download local
+        downloadScene(scene)
+      }
+    } else {
+      downloadScene(scene)
+    }
+
     setTimeout(() => { publishedRef.current = false }, 2000)
-  }, [triggers])
+  }, [triggers, env])
 
   // ── Sidebar tabs: os do Pascal + aba de triggers RPG ──────────────────────
   const sidebarTabs = [
@@ -128,6 +154,13 @@ export function EditorRoot() {
       id:        "environment",
       label:     "Ambiente",
       component: EnvironmentSidebarTab,
+      mobileDefaultSnap: 0.5,
+      mobileIcon: null,
+    },
+    {
+      id:        "assets",
+      label:     "Assets",
+      component: AssetSidebarTab,
       mobileDefaultSnap: 0.5,
       mobileIcon: null,
     },

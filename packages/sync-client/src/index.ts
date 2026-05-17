@@ -5,6 +5,6 @@ export { useGameRoom, useRoomStore }                 from "./use-game-room.js"
 export { useChat }                                   from "./use-chat.js"
 export { useDice }                                   from "./use-dice.js"
 
-export type { GameRoomStatus, Participant, TokenPosition, ActiveScene, FogCell, UseGameRoomOptions } from "./use-game-room.js"
+export type { GameRoomStatus, Participant, TokenPosition, ActiveScene, FogCell, NpcToken, UseGameRoomOptions } from "./use-game-room.js"
 export type { ChatMessage }  from "./use-chat.js"
 export type { DiceResult }   from "./use-dice.js"

@@ -5,14 +5,15 @@ import * as THREE             from "three"
 import { useViewer }          from "@pascal-app/viewer"
 import { IsoCamera }          from "./iso-camera"
 import { FogOfWarOverlay }    from "./fog-of-war"
+import { WallCutaway }        from "./wall-cutaway"
 import { TokenMesh }          from "../tokens/token-mesh"
 import { useSceneStore }      from "../../store/scene-store"
 import { useAuthStore }       from "../../store/auth-store"
 import { injectSceneIntoPascal, clearPascalScene } from "../../lib/pascal-bridge"
 import type {
-  ActiveScene, FogCell, TokenPosition, Participant,
+  ActiveScene, FogCell, TokenPosition, Participant, NpcToken,
 } from "@rpg3d/sync-client"
-import type { EnvironmentConfig, SpawnNode } from "@rpg3d/schema"
+import type { EnvironmentConfig, SpawnNode, EvSpawnNpc } from "@rpg3d/schema"
 
 // Lazy — Pascal Viewer é pesado, carregado só quando necessário
 const PascalViewer = lazy(() =>
@@ -29,12 +30,19 @@ type Props = {
   activeScene:  ActiveScene | null
   fogCells:     FogCell[]
   tokens:       Record<string, TokenPosition>
+  npcTokens:    Record<string, NpcToken>
   participants: Participant[]
   isMaster:     boolean
   onTokenMove:  (characterId: string, pos: { x: number; y: number; z: number }, rotation: number) => void
+  onNpcSpawn?:  (data: EvSpawnNpc) => void
+  onNpcDespawn?: (tokenId: string) => void
 }
 
-export function GameCanvas({ activeScene, fogCells, tokens, participants, isMaster, onTokenMove }: Props) {
+function npcAsToken(npc: NpcToken): TokenPosition {
+  return { characterId: npc.tokenId, userId: "", position: npc.position, rotation: npc.rotation }
+}
+
+export function GameCanvas({ activeScene, fogCells, tokens, npcTokens, participants, isMaster, onTokenMove, onNpcSpawn, onNpcDespawn }: Props) {
   const { load, clear, sceneFile, environment, loadState } = useSceneStore()
   const { characterId, userId } = useAuthStore()
   const [pascalReady, setPascalReady] = useState(false)
@@ -113,8 +121,23 @@ export function GameCanvas({ activeScene, fogCells, tokens, participants, isMast
                   />
                 )
               })}
+              {Object.values(npcTokens).map(npc => (
+                <TokenMesh
+                  key={npc.tokenId}
+                  token={npcAsToken(npc)}
+                  name={npc.name}
+                  role={npc.role}
+                  isOwn={isMaster}
+                  isMaster={isMaster}
+                  avatarType={npc.avatarType}
+                  avatarUrl={npc.avatarUrl}
+                  onMove={(pos, rot) => onTokenMove(npc.tokenId, pos, rot)}
+                  onDespawn={onNpcDespawn ? () => onNpcDespawn(npc.tokenId) : undefined}
+                />
+              ))}
             </Suspense>
-            <NpcSpawnMarkers isMaster={isMaster} />
+            <NpcSpawnMarkers isMaster={isMaster} onSpawn={onNpcSpawn} />
+            <WallCutaway tokens={tokens} />
           </PascalViewer>
         </Suspense>
       </div>
@@ -166,8 +189,22 @@ export function GameCanvas({ activeScene, fogCells, tokens, participants, isMast
                 />
               )
             })}
+            {Object.values(npcTokens).map(npc => (
+              <TokenMesh
+                key={npc.tokenId}
+                token={npcAsToken(npc)}
+                name={npc.name}
+                role={npc.role}
+                isOwn={isMaster}
+                isMaster={isMaster}
+                avatarType={npc.avatarType}
+                avatarUrl={npc.avatarUrl}
+                onMove={(pos, rot) => onTokenMove(npc.tokenId, pos, rot)}
+                onDespawn={onNpcDespawn ? () => onNpcDespawn(npc.tokenId) : undefined}
+              />
+            ))}
           </Suspense>
-          <NpcSpawnMarkers isMaster={isMaster} />
+          <NpcSpawnMarkers isMaster={isMaster} onSpawn={onNpcSpawn} />
         </Canvas>
       </div>
 
@@ -188,7 +225,7 @@ const NPC_COLORS: Record<string, string> = {
   any:   "#6b7280",  // cinza
 }
 
-function NpcSpawnMarkers({ isMaster }: { isMaster: boolean }) {
+function NpcSpawnMarkers({ isMaster, onSpawn }: { isMaster: boolean; onSpawn?: (data: EvSpawnNpc) => void }) {
   const triggers = useSceneStore(s => s.triggers)
   if (!isMaster) return null
 
@@ -201,24 +238,36 @@ function NpcSpawnMarkers({ isMaster }: { isMaster: boolean }) {
   return (
     <>
       {spawns.map(node => (
-        <NpcMarker key={node.id} node={node} />
+        <NpcMarker key={node.id} node={node} onSpawn={onSpawn} />
       ))}
     </>
   )
 }
 
-function NpcMarker({ node }: { node: SpawnNode }) {
+function NpcMarker({ node, onSpawn }: { node: SpawnNode; onSpawn?: (data: EvSpawnNpc) => void }) {
+  const [hovered, setHovered] = useState(false)
   const color = NPC_COLORS[node.forRole] ?? NPC_COLORS.any!
   const label = node.label ?? (node.forRole === "npc" ? "NPC" : "Inimigo")
+  const canSpawn = !!onSpawn
+
+  const handleClick = () => {
+    if (!canSpawn || (node.forRole !== "npc" && node.forRole !== "enemy")) return
+    onSpawn({ role: node.forRole, name: label, position: node.position, rotation: 0 })
+  }
 
   return (
-    <group position={[node.position.x, 0, node.position.z]}>
+    <group
+      position={[node.position.x, 0, node.position.z]}
+      onClick={canSpawn ? handleClick : undefined}
+      onPointerEnter={canSpawn ? () => setHovered(true) : undefined}
+      onPointerLeave={canSpawn ? () => setHovered(false) : undefined}
+    >
       {/* Disco base */}
       <Circle args={[0.45, 32]} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
         <meshStandardMaterial
           color={color}
           emissive={color}
-          emissiveIntensity={0.3}
+          emissiveIntensity={hovered ? 0.7 : 0.3}
           roughness={0.5}
           opacity={0.75}
           transparent
@@ -240,7 +289,7 @@ function NpcMarker({ node }: { node: SpawnNode }) {
         outlineWidth={0.03}
         outlineColor="#000000"
       >
-        {label}
+        {hovered ? `Spawnar ${label}` : label}
       </Text>
     </group>
   )

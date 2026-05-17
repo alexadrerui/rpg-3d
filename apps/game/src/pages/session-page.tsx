@@ -1,3 +1,4 @@
+import { useState } from "react"
 import { useParams, useLocation } from "react-router-dom"
 import { useGameRoom }   from "@rpg3d/sync-client"
 import { useAuthStore }  from "../store/auth-store"
@@ -7,6 +8,7 @@ import { DicePanel }     from "../components/dice/dice-panel"
 import { ParticipantsPanel }     from "../components/hud/participants-panel"
 import { MasterControls }        from "../components/hud/master-controls"
 import { TriggerNotifications, pushTriggerNotification } from "../components/hud/trigger-notifications"
+import { DiceOverlay } from "../components/dice/dice-overlay"
 import { useSceneStore } from "../store/scene-store"
 
 const SERVER_URL = (import.meta as unknown as Record<string,Record<string,string>>).env?.VITE_GAME_SERVER_URL ?? "http://localhost:4001"
@@ -36,6 +38,15 @@ export function SessionPage() {
 
   const isMaster = auth.isMaster
 
+  const [dice3d, setDice3d] = useState(
+    () => localStorage.getItem("dice3d") !== "false",
+  )
+  const toggleDice3d = () =>
+    setDice3d(prev => {
+      localStorage.setItem("dice3d", String(!prev))
+      return !prev
+    })
+
   return (
     <div className="h-screen w-screen relative overflow-hidden bg-neutral-950 select-none">
 
@@ -44,9 +55,12 @@ export function SessionPage() {
         activeScene={room.activeScene}
         fogCells={room.fogCells}
         tokens={room.tokens}
+        npcTokens={room.npcTokens}
         participants={room.participants}
         isMaster={isMaster}
         onTokenMove={room.moveToken}
+        onNpcSpawn={isMaster ? (data) => { room.spawnNpc(data).catch(console.error) } : undefined}
+        onNpcDespawn={isMaster ? (id) => { room.despawnNpc(id).catch(console.error) } : undefined}
       />
 
       {/* ── HUD overlay ── */}
@@ -82,8 +96,16 @@ export function SessionPage() {
 
         {/* BOTTOM RIGHT — dados */}
         <div className="absolute bottom-4 right-4 pointer-events-auto">
-          <DicePanel serverUrl={SERVER_URL} characterId={auth.characterId} />
+          <DicePanel
+            serverUrl={SERVER_URL}
+            characterId={auth.characterId}
+            dice3d={dice3d}
+            onToggleDice3d={toggleDice3d}
+          />
         </div>
+
+        {/* Overlay de física 3D — só renderiza quando ativado */}
+        {dice3d && <DiceOverlay serverUrl={SERVER_URL} />}
 
         {/* Transition overlay (fade/dissolve) */}
         <SceneTransitionOverlay transitionFx={room.activeScene?.transitionFx} />

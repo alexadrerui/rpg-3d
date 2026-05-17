@@ -1,7 +1,7 @@
 import { z } from "zod"
-import { AssetRef } from "./base"
-import { AnyTriggerNode } from "./triggers"
-import { EnvironmentConfig } from "./environment"
+import { AssetRef } from "./base.js"
+import { AnyTriggerNode } from "./triggers.js"
+import { EnvironmentConfig } from "./environment.js"
 
 // ─────────────────────────────────────────────────────────────────────────────
 // METADADOS DA CENA

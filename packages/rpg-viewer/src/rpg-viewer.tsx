@@ -52,8 +52,8 @@ export function RpgViewer({ mode, sceneUrl }: RpgViewerProps) {
         // Injeta os nodes da cena
         const { useScene } = coreModule
         useScene.getState().setScene(
-          data.scene.nodes as Parameters<typeof useScene.getState().setScene>[0],
-          data.scene.rootNodeIds,
+          data.scene.nodes as any,
+          data.scene.rootNodeIds as any,
         )
 
         if (!cancelled) {

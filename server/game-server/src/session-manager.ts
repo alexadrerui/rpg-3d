@@ -23,17 +23,28 @@ export type TokenState = {
   rotation:    number
 }
 
+export type NpcTokenState = {
+  tokenId:     string
+  role:        "npc" | "enemy"
+  name:        string
+  position:    { x: number; y: number; z: number }
+  rotation:    number
+  avatarType?: "none" | "image" | "model"
+  avatarUrl?:  string
+}
+
 export type RoomState = {
   sessionId:      string
   campaignId:     string
   masterId:       string
   activeSceneId:  string | null
   activeSceneUrl: string | null
-  participants:   Map<string, Participant>   // userId → Participant
-  tokens:         Map<string, TokenState>   // characterId → TokenState
+  participants:   Map<string, Participant>     // userId → Participant
+  tokens:         Map<string, TokenState>     // characterId → TokenState
+  npcTokens:      Map<string, NpcTokenState>  // tokenId → NpcTokenState
   disarmedTraps:  Set<string>
   revealedNotes:  Set<string>
-  fogCells:       Set<string>               // "x:z" serializado
+  fogCells:       Set<string>                 // "x:z" serializado
   lastActivity:   number
 }
 
@@ -71,6 +82,7 @@ export class SessionManager {
       activeSceneUrl: null,
       participants:   new Map(),
       tokens:         new Map(),
+      npcTokens:      new Map(),
       disarmedTraps:  new Set(),
       revealedNotes:  new Set(),
       fogCells:       new Set(),
@@ -160,6 +172,37 @@ export class SessionManager {
     this.persist(room)
   }
 
+  // ── NPC tokens ───────────────────────────────────────────────────────────
+
+  spawnNpcToken(room: RoomState, npc: NpcTokenState): void {
+    room.npcTokens.set(npc.tokenId, npc)
+    this.touch(room)
+    this.persist(room)
+  }
+
+  moveNpcToken(room: RoomState, tokenId: string, position: { x: number; y: number; z: number }, rotation: number): void {
+    const npc = room.npcTokens.get(tokenId)
+    if (!npc) return
+    npc.position = position
+    npc.rotation = rotation
+    // Não persiste no Redis a cada move (high-frequency), consistente com player tokens
+    this.touch(room)
+  }
+
+  despawnNpcToken(room: RoomState, tokenId: string): boolean {
+    const existed = room.npcTokens.delete(tokenId)
+    if (existed) { this.touch(room); this.persist(room) }
+    return existed
+  }
+
+  isNpcToken(room: RoomState, tokenId: string): boolean {
+    return room.npcTokens.has(tokenId)
+  }
+
+  getNpcTokens(room: RoomState): NpcTokenState[] {
+    return Array.from(room.npcTokens.values())
+  }
+
   // ── Fog of war ───────────────────────────────────────────────────────────
 
   revealFogCells(room: RoomState, cells: { x: number; z: number }[]): string[] {
@@ -182,10 +225,13 @@ export class SessionManager {
   }
 
   getFogCells(room: RoomState): { x: number; z: number }[] {
-    return Array.from(room.fogCells).map(key => {
-      const [x, z] = key.split(":").map(Number)
-      return { x, z }
-    })
+    const result: { x: number; z: number }[] = []
+    for (const key of room.fogCells) {
+      const [rawX, rawZ] = key.split(":")
+      const x = Number(rawX), z = Number(rawZ)
+      if (!isNaN(x) && !isNaN(z)) result.push({ x, z })
+    }
+    return result
   }
 
   // ── Persistência Redis ───────────────────────────────────────────────────
@@ -206,6 +252,7 @@ export class SessionManager {
         disarmedTraps:  Array.from(room.disarmedTraps),
         revealedNotes:  Array.from(room.revealedNotes),
         fogCells:       Array.from(room.fogCells),
+        npcTokens:      Array.from(room.npcTokens.values()),
         participants:   Array.from(room.participants.entries()).map(([, p]) => p),
         lastActivity:   room.lastActivity,
       }
@@ -234,6 +281,7 @@ export class SessionManager {
         activeSceneUrl: d.activeSceneUrl,
         participants:   new Map((d.participants as Participant[]).map(p => [p.userId, p])),
         tokens:         new Map(),
+        npcTokens:      new Map((d.npcTokens as NpcTokenState[] ?? []).map(n => [n.tokenId, n])),
         disarmedTraps:  new Set(d.disarmedTraps),
         revealedNotes:  new Set(d.revealedNotes),
         fogCells:       new Set(d.fogCells),

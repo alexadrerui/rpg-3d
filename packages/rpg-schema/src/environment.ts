@@ -1,5 +1,5 @@
 import { z } from "zod"
-import { ColorHex, AssetRef } from "./base"
+import { ColorHex, AssetRef } from "./base.js"
 
 // ─────────────────────────────────────────────────────────────────────────────
 // NÉVOA DE GUERRA
@@ -37,8 +37,8 @@ export const DirectionalLightConfig = z.object({
 })
 
 export const LightingConfig = z.object({
-  ambient:     AmbientLightConfig.default({}),
-  directional: DirectionalLightConfig.default({}),
+  ambient:     AmbientLightConfig.default({} as any),
+  directional: DirectionalLightConfig.default({} as any),
   toneMappingExposure: z.number().min(0).max(4).default(1),
 })
 
@@ -58,7 +58,7 @@ export const AtmosphereConfig = z.object({
     color:   ColorHex.default("#1a1a2e"),
     near:    z.number().positive().default(10),
     far:     z.number().positive().default(50),
-  }).default({}),
+  }).default({} as any),
 
   ambientSound: AssetRef.optional(),  // trilha ambiente da cena
 })
@@ -95,10 +95,10 @@ export const CameraConfig = z.object({
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const EnvironmentConfig = z.object({
-  fogOfWar:   FogOfWarConfig.default({}),
-  lighting:   LightingConfig.default({}),
-  atmosphere: AtmosphereConfig.default({}),
-  camera:     CameraConfig.default({}),
+  fogOfWar:   FogOfWarConfig.default({} as any),
+  lighting:   LightingConfig.default({} as any),
+  atmosphere: AtmosphereConfig.default({} as any),
+  camera:     CameraConfig.default({} as any),
 })
 
 export type FogOfWarConfig      = z.infer<typeof FogOfWarConfig>

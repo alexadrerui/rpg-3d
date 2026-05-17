@@ -11,7 +11,7 @@ export function getSocket(serverUrl?: string): RpgSocket {
   const url = serverUrl ?? (
     typeof window !== "undefined"
       ? (window as unknown as Record<string, string>).__VITE_GAME_SERVER_URL__
-      : process.env.VITE_GAME_SERVER_URL
+      : undefined
   ) ?? "http://localhost:4001"
 
   socket = io(url, {

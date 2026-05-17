@@ -18,12 +18,15 @@ const SECTIONS: { key: Section; label: string; icon: string }[] = [
   { key: "camera",     label: "Câmera",           icon: "🎥" },
 ]
 
-const PRESETS: { key: EnvPreset; label: string; icon: string; desc: string }[] = [
-  { key: "dungeon", label: "Masmorra",   icon: "🏚", desc: "Escuro, nevoa total"    },
-  { key: "forest",  label: "Floresta",   icon: "🌲", desc: "Verde, névoa de raycast"},
-  { key: "tavern",  label: "Taverna",    icon: "🍺", desc: "Quente, sem névoa"      },
-  { key: "daylit",  label: "Dia aberto", icon: "☀",  desc: "Luz solar intensa"      },
-  { key: "void",    label: "Vazio",      icon: "◾",  desc: "Escuridão total"        },
+const PRESETS: { key: EnvPreset; label: string; icon: string; desc: string; group: string }[] = [
+  { key: "dungeon",   label: "Masmorra",      icon: "🏚", desc: "Escuro, névoa por raio",     group: "Fantasia"  },
+  { key: "forest",    label: "Floresta",      icon: "🌲", desc: "Verde, linha de visão",       group: "Fantasia"  },
+  { key: "tavern",    label: "Taverna",       icon: "🍺", desc: "Quente, sem névoa",           group: "Fantasia"  },
+  { key: "daylit",    label: "Dia aberto",    icon: "☀",  desc: "Luz solar intensa",           group: "Fantasia"  },
+  { key: "void",      label: "Vazio",         icon: "◾",  desc: "Escuridão total",             group: "Fantasia"  },
+  { key: "abandoned", label: "Abandonado",    icon: "🏭", desc: "Frio, névoa teal por sala",   group: "Horror"    },
+  { key: "horror",    label: "Horror",        icon: "🩸", desc: "Vermelho, linha de visão",    group: "Horror"    },
+  { key: "crypt",     label: "Cripta",        icon: "💀", desc: "Violeta, salas reveladas",    group: "Horror"    },
 ]
 
 export function EnvironmentSidebarTab() {
@@ -57,19 +60,26 @@ export function EnvironmentSidebarTab() {
 
         {/* Presets dropdown */}
         {showPresets && (
-          <div className="grid grid-cols-1 gap-1">
-            {PRESETS.map(p => (
-              <button
-                key={p.key}
-                onClick={() => { applyPreset(p.key); setShowPresets(false) }}
-                className="flex items-center gap-2 px-2.5 py-2 rounded-lg bg-neutral-800/60 hover:bg-neutral-800 text-left transition-colors"
-              >
-                <span className="text-base w-5 text-center">{p.icon}</span>
-                <div>
-                  <p className="text-xs font-medium text-neutral-200">{p.label}</p>
-                  <p className="text-[10px] text-neutral-600">{p.desc}</p>
+          <div className="space-y-2">
+            {(["Fantasia", "Horror"] as const).map(group => (
+              <div key={group}>
+                <p className="text-[9px] font-semibold uppercase tracking-widest text-neutral-600 px-1 mb-1">{group}</p>
+                <div className="grid grid-cols-1 gap-0.5">
+                  {PRESETS.filter(p => p.group === group).map(p => (
+                    <button
+                      key={p.key}
+                      onClick={() => { applyPreset(p.key); setShowPresets(false) }}
+                      className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-neutral-800/60 hover:bg-neutral-800 text-left transition-colors"
+                    >
+                      <span className="text-base w-5 text-center">{p.icon}</span>
+                      <div>
+                        <p className="text-xs font-medium text-neutral-200">{p.label}</p>
+                        <p className="text-[10px] text-neutral-600">{p.desc}</p>
+                      </div>
+                    </button>
+                  ))}
                 </div>
-              </button>
+              </div>
             ))}
           </div>
         )}

@@ -1,5 +1,5 @@
-import { useMemo, useRef } from "react"
-import { useFrame }        from "@react-three/fiber"
+import { useLayoutEffect, useMemo, useRef } from "react"
+import { useFrame }                         from "@react-three/fiber"
 import * as THREE from "three"
 import type { FogCell, FogOfWarConfig } from "@rpg3d/schema"
 
@@ -19,7 +19,6 @@ type Props = {
 }
 
 export function FogOfWarOverlay({ cells, config, enabled }: Props) {
-  const meshRef    = useRef<THREE.Mesh>(null)
   const textureRef = useRef<THREE.DataTexture | null>(null)
   const dataRef    = useRef(new Uint8Array(TEXTURE_SIZE * TEXTURE_SIZE * 4))
   const dirtyRef   = useRef(true)
@@ -48,10 +47,9 @@ export function FogOfWarOverlay({ cells, config, enabled }: Props) {
       transparent: true,
       depthWrite:  false,
       uniforms: {
-        uFogTex:   { value: texture },
-        uColor:    { value: new THREE.Color(r / 255, g / 255, b / 255) },
-        uOpacity:  { value: config.opacity },
-        uGridSize: { value: GRID_SIZE },
+        uFogTex:  { value: texture },
+        uColor:   { value: new THREE.Color(r / 255, g / 255, b / 255) },
+        uOpacity: { value: config.opacity },
       },
       vertexShader: `
         varying vec2 vUv;
@@ -66,7 +64,7 @@ export function FogOfWarOverlay({ cells, config, enabled }: Props) {
         uniform float     uOpacity;
         varying vec2      vUv;
         void main() {
-          float fog = texture2D(uFogTex, vUv).a / 255.0;
+          float fog = texture2D(uFogTex, vUv).a;
           gl_FragColor = vec4(uColor, fog * uOpacity);
         }
       `,
@@ -78,10 +76,19 @@ export function FogOfWarOverlay({ cells, config, enabled }: Props) {
     if (!dirtyRef.current && cells.length === prevLen.current) return
     if (!textureRef.current) return
 
-    prevLen.current = cells.length
+    const data         = dataRef.current
+    const wasCleared   = dirtyRef.current && cells.length === 0 && prevLen.current > 0
+
+    prevLen.current  = cells.length
     dirtyRef.current = false
 
-    const data   = dataRef.current
+    if (wasCleared) {
+      // fog:clear recebido — restaura opacidade total
+      for (let i = 3; i < data.length; i += 4) data[i] = 255
+      textureRef.current.needsUpdate = true
+      return
+    }
+
     const offset = GRID_SIZE / 2
 
     // Revela as células
@@ -105,8 +112,8 @@ export function FogOfWarOverlay({ cells, config, enabled }: Props) {
     textureRef.current.needsUpdate = true
   })
 
-  // Marca dirty quando cells mudam
-  useMemo(() => { dirtyRef.current = true }, [cells])
+  // Marca dirty quando cells mudam (useLayoutEffect — garante execução antes do próximo useFrame)
+  useLayoutEffect(() => { dirtyRef.current = true }, [cells])
 
   if (!enabled) return null
 
@@ -114,7 +121,6 @@ export function FogOfWarOverlay({ cells, config, enabled }: Props) {
 
   return (
     <mesh
-      ref={meshRef}
       position={[0, 0.05, 0]}
       rotation={[-Math.PI / 2, 0, 0]}
       material={material}

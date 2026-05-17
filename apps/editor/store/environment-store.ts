@@ -41,7 +41,9 @@ export const DEFAULT_ENVIRONMENT: EnvironmentConfig = {
 }
 
 // Presets rápidos — aplicados de uma vez
-export type EnvPreset = "dungeon" | "forest" | "tavern" | "daylit" | "void"
+export type EnvPreset =
+  | "dungeon" | "forest" | "tavern" | "daylit" | "void"
+  | "abandoned" | "horror" | "crypt"
 
 export const ENV_PRESETS: Record<EnvPreset, EnvironmentConfig> = {
   dungeon: {
@@ -73,6 +75,32 @@ export const ENV_PRESETS: Record<EnvPreset, EnvironmentConfig> = {
     lighting:   { ambient: { color: "#080808", intensity: 0.1 }, directional: { enabled: false, color: "#ffffff", intensity: 0, position: { x:0, y:10, z:0 }, castShadow: false }, toneMappingExposure: 0.5 },
     atmosphere: { skybox: { kind: "none" }, fog: { enabled: true, color: "#000000", near: 5, far: 20 } },
     camera:     { mode: "isometric", defaultPosition: { x:0, y:20, z:20 }, defaultTarget: { x:0, y:0, z:0 }, minZoom: 5, maxZoom: 40 },
+  },
+
+  // ── Presets horror / dark ──────────────────────────────────────────────────
+
+  // Prédio abandonado, luz fria, névoa teal no chão (estética da imagem de referência)
+  abandoned: {
+    fogOfWar:   { enabled: true, color: "#000000", opacity: 0.97, revealRadius: 4, revealMode: "room", persistRevealed: true },
+    lighting:   { ambient: { color: "#0a1a1f", intensity: 0.18 }, directional: { enabled: true, color: "#4cc9d0", intensity: 0.35, position: { x:-5, y:12, z:8 }, castShadow: true }, toneMappingExposure: 0.7 },
+    atmosphere: { skybox: { kind: "color", color: "#050d10" }, fog: { enabled: true, color: "#061618", near: 6, far: 28 } },
+    camera:     { mode: "isometric", defaultPosition: { x:0, y:20, z:20 }, defaultTarget: { x:0, y:0, z:0 }, minZoom: 5, maxZoom: 40 },
+  },
+
+  // Horror clássico: vermelho sangue, visibilidade mínima, névoa pesada
+  horror: {
+    fogOfWar:   { enabled: true, color: "#0a0000", opacity: 0.97, revealRadius: 3, revealMode: "raycast", persistRevealed: true },
+    lighting:   { ambient: { color: "#1a0000", intensity: 0.12 }, directional: { enabled: true, color: "#8b0000", intensity: 0.4, position: { x:0, y:15, z:5 }, castShadow: true }, toneMappingExposure: 0.65 },
+    atmosphere: { skybox: { kind: "color", color: "#080000" }, fog: { enabled: true, color: "#0a0000", near: 5, far: 18 } },
+    camera:     { mode: "isometric", defaultPosition: { x:0, y:20, z:20 }, defaultTarget: { x:0, y:0, z:0 }, minZoom: 5, maxZoom: 35 },
+  },
+
+  // Cripta subterrânea: violeta frio, salas reveladas por modo room, névoa densa
+  crypt: {
+    fogOfWar:   { enabled: true, color: "#000008", opacity: 0.98, revealRadius: 3.5, revealMode: "room", persistRevealed: true },
+    lighting:   { ambient: { color: "#0a0818", intensity: 0.15 }, directional: { enabled: true, color: "#5530a0", intensity: 0.3, position: { x:3, y:14, z:3 }, castShadow: true }, toneMappingExposure: 0.6 },
+    atmosphere: { skybox: { kind: "color", color: "#040008" }, fog: { enabled: true, color: "#060010", near: 5, far: 22 } },
+    camera:     { mode: "isometric", defaultPosition: { x:0, y:20, z:20 }, defaultTarget: { x:0, y:0, z:0 }, minZoom: 5, maxZoom: 38 },
   },
 }
 

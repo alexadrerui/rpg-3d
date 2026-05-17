@@ -4,8 +4,9 @@ import { create }    from "zustand"
 import { getSocket } from "./socket.js"
 import type {
   EvRoomJoined, EvSceneLoaded, EvTokenMoved,
+  EvNpcSpawned,
   EvMessageReceived, EvDiceResult, EvTriggerActivated,
-  EvJoinRoom, EvLoadScene,
+  EvJoinRoom, EvLoadScene, EvSpawnNpc, EvDespawnNpc,
 } from "@rpg3d/schema"
 
 // ── Estado Zustand ────────────────────────────────────────────────────────────
@@ -14,16 +15,22 @@ export type Participant    = { userId: string; characterId?: string; isMaster: b
 export type TokenPosition  = { characterId: string; userId: string; position: { x: number; y: number; z: number }; rotation: number }
 export type ActiveScene    = { sceneId: string; sceneUrl: string; transitionFx: "fade" | "dissolve" | "none" }
 export type FogCell        = { x: number; z: number }
+export type NpcToken       = EvNpcSpawned
 
 type RoomStore = {
   status: GameRoomStatus; sessionId: string | null
-  participants: Participant[]; tokens: Record<string, TokenPosition>
+  participants: Participant[]
+  tokens:    Record<string, TokenPosition>
+  npcTokens: Record<string, NpcToken>
   activeScene: ActiveScene | null; fogCells: FogCell[]; lastError: string | null
   _setStatus:      (s: GameRoomStatus) => void
   _setSession:     (d: EvRoomJoined) => void
   _setParticipant: (p: Participant) => void
   _setScene:       (s: ActiveScene) => void
   _updateToken:    (t: EvTokenMoved) => void
+  _spawnNpc:       (n: NpcToken) => void
+  _moveNpc:        (tokenId: string, pos: NpcToken["position"], rotation: number) => void
+  _despawnNpc:     (tokenId: string) => void
   _revealFog:      (c: FogCell[]) => void
   _clearFog:       () => void
   _setError:       (e: string | null) => void
@@ -31,7 +38,7 @@ type RoomStore = {
 
 export const useRoomStore = create<RoomStore>((set) => ({
   status: "disconnected", sessionId: null,
-  participants: [], tokens: {}, activeScene: null, fogCells: [], lastError: null,
+  participants: [], tokens: {}, npcTokens: {}, activeScene: null, fogCells: [], lastError: null,
 
   _setStatus:      (status)    => set({ status }),
   _setError:       (lastError) => set({ lastError }),
@@ -45,6 +52,16 @@ export const useRoomStore = create<RoomStore>((set) => ({
     }),
   _setScene:    (activeScene) => set({ activeScene }),
   _updateToken: (t) => set(s => ({ tokens: { ...s.tokens, [t.characterId]: { characterId: t.characterId, userId: t.userId, position: t.position, rotation: t.rotation } } })),
+  _spawnNpc:    (n) => set(s => ({ npcTokens: { ...s.npcTokens, [n.tokenId]: n } })),
+  _moveNpc:     (tokenId, pos, rotation) => set(s => {
+    const npc = s.npcTokens[tokenId]
+    if (!npc) return {}
+    return { npcTokens: { ...s.npcTokens, [tokenId]: { ...npc, position: pos, rotation } } }
+  }),
+  _despawnNpc:  (tokenId) => set(s => {
+    const { [tokenId]: _, ...rest } = s.npcTokens
+    return { npcTokens: rest }
+  }),
   _revealFog:   (cells) => set(s => {
     if (!cells.length) return {}
     const existing = new Set(s.fogCells.map(c => `${c.x}:${c.z}`))
@@ -78,9 +95,14 @@ export function useGameRoom(opts: UseGameRoomOptions) {
     store._setStatus("connecting")
 
     socket.on("room:joined",     (d) => store._setSession(d))
-    socket.on("room:participant",(d) => store._setParticipant(d))
+    socket.on("room:participant",(d) => store._setParticipant({ ...d, name: d.name ?? d.userId }))
     socket.on("scene:loaded",    (d) => { store._setScene(d); cbRef.current.onSceneLoaded?.(d) })
-    socket.on("token:moved",     (d) => store._updateToken(d))
+    socket.on("token:moved",     (d) => {
+      if (useRoomStore.getState().npcTokens[d.characterId]) store._moveNpc(d.characterId, d.position, d.rotation)
+      else store._updateToken(d)
+    })
+    socket.on("npc:spawned",   (d) => store._spawnNpc(d))
+    socket.on("npc:despawned", ({ tokenId }) => store._despawnNpc(tokenId))
     socket.on("chat:message",    (d) => cbRef.current.onMessage?.(d))
     socket.on("dice:result",     (d) => cbRef.current.onDiceResult?.(d))
     socket.on("trigger:activated",(d) => cbRef.current.onTriggerActivated?.(d))
@@ -102,7 +124,8 @@ export function useGameRoom(opts: UseGameRoomOptions) {
 
     return () => {
       socket.off("room:joined").off("room:participant").off("scene:loaded")
-        .off("token:moved").off("chat:message").off("dice:result")
+        .off("token:moved").off("npc:spawned").off("npc:despawned")
+        .off("chat:message").off("dice:result")
         .off("trigger:activated").off("fog:revealed").off("error")
         .off("connect_error").off("ping")
     }
@@ -123,10 +146,16 @@ export function useGameRoom(opts: UseGameRoomOptions) {
   const clearFog   = useCallback(() =>
     new Promise<void>((res, rej) => getSocket(serverUrl).emit("fog:clear", { confirm: true }, r => r.ok ? res() : rej(new Error(r.error)))), [serverUrl])
 
+  const spawnNpc   = useCallback((data: EvSpawnNpc) =>
+    new Promise<string>((res, rej) => getSocket(serverUrl).emit("npc:spawn", data, r => r.ok ? res(r.data.tokenId) : rej(new Error(r.error)))), [serverUrl])
+
+  const despawnNpc = useCallback((tokenId: string) =>
+    new Promise<void>((res, rej) => getSocket(serverUrl).emit("npc:despawn", { tokenId }, r => r.ok ? res() : rej(new Error(r.error)))), [serverUrl])
+
   return {
     status: store.status, sessionId: store.sessionId,
-    participants: store.participants, tokens: store.tokens,
+    participants: store.participants, tokens: store.tokens, npcTokens: store.npcTokens,
     activeScene: store.activeScene, fogCells: store.fogCells, lastError: store.lastError,
-    loadScene, moveToken, revealNote, disarmTrap, clearFog,
+    loadScene, moveToken, revealNote, disarmTrap, clearFog, spawnNpc, despawnNpc,
   }
 }

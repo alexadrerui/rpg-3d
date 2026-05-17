@@ -5,6 +5,8 @@ import {
   EvJoinRoom,
   EvLoadScene,
   EvMoveToken,
+  EvSpawnNpc,
+  EvDespawnNpc,
   EvSendMessage,
   EvRollDice,
   EvRevealNote,
@@ -14,28 +16,53 @@ import {
 } from "@rpg3d/schema"
 import { rollDice }         from "@rpg3d/dice-engine"
 import { SessionManager }   from "./session-manager.js"
-import { isInsideTrigger, computeRevealedCells } from "./collision.js"
+import {
+  isInsideTrigger,
+  computeRevealedCells,
+  computeRaycastCells,
+  computeRoomCells,
+  extractWallSegments,
+  type WallSegment,
+} from "./collision.js"
 import type { JwtPayload }  from "./auth.js"
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Cache de cenas carregadas (sceneId → triggers[])
+// Cache de cenas carregadas (sceneId → triggers + walls + fog config)
 // Em produção: buscar na API. Aqui: cache em memória após primeiro load.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const sceneTriggersCache = new Map<string, AnyTriggerNode[]>()
-const triggerCooldowns   = new Map<string, number>()  // triggerId → timestamp
+type SceneData = {
+  triggers:     AnyTriggerNode[]
+  walls:        WallSegment[]
+  fogMode:      "circle" | "raycast" | "room"
+  revealRadius: number
+}
 
-async function fetchSceneTriggers(sceneUrl: string, sceneId: string): Promise<AnyTriggerNode[]> {
-  if (sceneTriggersCache.has(sceneId)) return sceneTriggersCache.get(sceneId)!
+const sceneDataCache   = new Map<string, SceneData>()
+const triggerCooldowns = new Map<string, number>()  // triggerId → timestamp
+
+async function fetchSceneData(sceneUrl: string, sceneId: string): Promise<SceneData> {
+  if (sceneDataCache.has(sceneId)) return sceneDataCache.get(sceneId)!
   try {
-    const res  = await fetch(sceneUrl)
-    const data = await res.json() as { triggers?: AnyTriggerNode[] }
-    const triggers = data.triggers ?? []
-    sceneTriggersCache.set(sceneId, triggers)
-    return triggers
+    const res = await fetch(sceneUrl)
+    const raw = await res.json() as {
+      triggers?:    AnyTriggerNode[]
+      scene?:       { nodes?: Record<string, unknown> }
+      environment?: { fogOfWar?: { revealMode?: string; revealRadius?: number } }
+    }
+    const triggers    = raw.triggers ?? []
+    const walls       = extractWallSegments(raw.scene?.nodes ?? {})
+    const fogCfg      = raw.environment?.fogOfWar
+    const fogMode     = (fogCfg?.revealMode ?? "circle") as SceneData["fogMode"]
+    const revealRadius = fogCfg?.revealRadius ?? 5
+
+    const data: SceneData = { triggers, walls, fogMode, revealRadius }
+    sceneDataCache.set(sceneId, data)
+    if (walls.length > 0) console.log(`[scene] ${sceneId}: ${walls.length} wall segments extracted`)
+    return data
   } catch {
     console.error(`[handlers] failed to fetch scene ${sceneId}`)
-    return []
+    return { triggers: [], walls: [], fogMode: "circle", revealRadius: 5 }
   }
 }
 
@@ -94,15 +121,7 @@ export function registerHandlers(
       avatarUrl,
     })
 
-    // Responde ao entrante com estado atual
-    cb({
-      ok:   true,
-      data: {
-        sessionId,
-        sceneId:      room.activeSceneId      ?? "",
-        participants: sessions.getParticipantsList(room),
-      },
-    })
+    cb({ ok: true, data: undefined })
 
     // Se já tem cena ativa, manda o URL para o novo participante
     if (room.activeSceneUrl) {
@@ -111,6 +130,11 @@ export function registerHandlers(
         sceneUrl:     room.activeSceneUrl,
         transitionFx: "none",
       })
+    }
+
+    // Restaura NPC tokens existentes na room
+    for (const npc of sessions.getNpcTokens(room)) {
+      socket.emit("npc:spawned", npc)
     }
 
     console.log(`[room:join] ${user.name} → session ${sessionId} (master: ${isMaster})`)
@@ -144,8 +168,8 @@ export function registerHandlers(
 
     sessions.setActiveScene(room, sceneId, sceneUrl)
 
-    // Pré-carrega triggers em cache
-    fetchSceneTriggers(sceneUrl, sceneId).catch(console.error)
+    // Pré-carrega dados da cena em cache (triggers + walls + fog config)
+    fetchSceneData(sceneUrl, sceneId).catch(console.error)
 
     // Broadcast para TODOS na sala (incluindo remetente)
     io.to(currentSessionId!).emit("scene:loaded", { sceneId, sceneUrl, transitionFx })
@@ -156,22 +180,33 @@ export function registerHandlers(
 
   // ── token:move ────────────────────────────────────────────────────────────
 
-  socket.on("token:move", async (raw) => {
+  socket.on("token:move", async (raw) => { try {
     const parsed = EvMoveToken.safeParse(raw)
     if (!parsed.success) return
 
     const room = currentSessionId ? sessions.get(currentSessionId) : null
     if (!room) return
 
+    const isNpc = sessions.isNpcToken(room, parsed.data.characterId)
+
+    // Apenas o mestre pode mover tokens NPC/enemy
+    if (isNpc && !sessions.isMaster(room, user.sub)) return
+
     const tokenData = { ...parsed.data, userId: user.sub }
-    sessions.updateToken(room, tokenData)
+
+    if (isNpc) {
+      sessions.moveNpcToken(room, parsed.data.characterId, parsed.data.position, parsed.data.rotation)
+    } else {
+      sessions.updateToken(room, tokenData)
+    }
 
     // Broadcast posição (excluindo remetente para evitar eco)
     socket.to(currentSessionId!).emit("token:moved", tokenData)
 
-    // ── Verificar triggers ──────────────────────────────────────────────────
-    if (room.activeSceneId && room.activeSceneUrl) {
-      const triggers = await fetchSceneTriggers(room.activeSceneUrl, room.activeSceneId)
+    // ── Verificar triggers + fog (só para tokens de jogador) ───────────────
+    if (!isNpc && room.activeSceneId && room.activeSceneUrl) {
+      const { triggers, walls, fogMode, revealRadius } =
+        await fetchSceneData(room.activeSceneUrl, room.activeSceneId)
 
       for (const trigger of triggers) {
         // Pula armadilhas desarmadas e notas já reveladas
@@ -222,9 +257,19 @@ export function registerHandlers(
       }
 
       // ── Fog of war ───────────────────────────────────────────────────────
-      const revealRadius = 5  // TODO: ler do environment config da cena
-      const cells = computeRevealedCells(parsed.data.position, revealRadius)
-      const newKeys = sessions.revealFogCells(room, cells)
+      let fogCells: { x: number; z: number }[]
+      switch (fogMode) {
+        case "raycast":
+          fogCells = computeRaycastCells(parsed.data.position, revealRadius, walls)
+          break
+        case "room":
+          // maxDistance = revealRadius × 3 para revelar salas generosas
+          fogCells = computeRoomCells(parsed.data.position, revealRadius * 3, walls)
+          break
+        default:
+          fogCells = computeRevealedCells(parsed.data.position, revealRadius)
+      }
+      const newKeys = sessions.revealFogCells(room, fogCells)
 
       if (newKeys.length > 0) {
         const newCells = newKeys.map(k => {
@@ -234,7 +279,7 @@ export function registerHandlers(
         io.to(currentSessionId!).emit("fog:revealed", { cells: newCells })
       }
     }
-  })
+  } catch (err) { console.error("[token:move] unhandled error:", err) } })
 
   // ── chat:send ─────────────────────────────────────────────────────────────
 
@@ -348,7 +393,7 @@ export function registerHandlers(
     if (!room) return cb({ ok: false, error: "NOT_IN_ROOM" })
     if (!sessions.isMaster(room, user.sub)) return cb({ ok: false, error: "FORBIDDEN" })
 
-    const triggers = room.activeSceneId ? sceneTriggersCache.get(room.activeSceneId) ?? [] : []
+    const triggers = room.activeSceneId ? (sceneDataCache.get(room.activeSceneId)?.triggers ?? []) : []
     const trigger  = triggers.find(t => t.id === parsed.data.triggerId)
     if (!trigger) return cb({ ok: false, error: "TRIGGER_NOT_FOUND" })
 
@@ -376,7 +421,7 @@ export function registerHandlers(
     sessions.disarmTrap(room, parsed.data.triggerId)
 
     // Atualiza o trigger no cache com isDisarmed = true
-    const triggers = room.activeSceneId ? sceneTriggersCache.get(room.activeSceneId) : undefined
+    const triggers = room.activeSceneId ? sceneDataCache.get(room.activeSceneId)?.triggers : undefined
     if (triggers) {
       const t = triggers.find(t => t.id === parsed.data.triggerId)
       if (t && t.type === "trigger_trap") (t as { isDisarmed: boolean }).isDisarmed = true
@@ -401,6 +446,45 @@ export function registerHandlers(
 
     cb({ ok: true, data: undefined })
     console.log(`[fog:clear] session ${currentSessionId}`)
+  })
+
+  // ── npc:spawn ─────────────────────────────────────────────────────────────
+
+  socket.on("npc:spawn", (raw, cb) => {
+    const parsed = EvSpawnNpc.safeParse(raw)
+    if (!parsed.success) return cb({ ok: false, error: "INVALID_PAYLOAD" })
+
+    const room = currentSessionId ? sessions.get(currentSessionId) : null
+    if (!room) return cb({ ok: false, error: "NOT_IN_ROOM" })
+    if (!sessions.isMaster(room, user.sub)) return cb({ ok: false, error: "FORBIDDEN" })
+
+    const tokenId = randomUUID()
+    const npc = { tokenId, ...parsed.data }
+
+    sessions.spawnNpcToken(room, npc)
+    io.to(currentSessionId!).emit("npc:spawned", npc)
+
+    cb({ ok: true, data: { tokenId } })
+    console.log(`[npc:spawn] ${npc.role} "${npc.name}" (${tokenId}) na session ${currentSessionId}`)
+  })
+
+  // ── npc:despawn ───────────────────────────────────────────────────────────
+
+  socket.on("npc:despawn", (raw, cb) => {
+    const parsed = EvDespawnNpc.safeParse(raw)
+    if (!parsed.success) return cb({ ok: false, error: "INVALID_PAYLOAD" })
+
+    const room = currentSessionId ? sessions.get(currentSessionId) : null
+    if (!room) return cb({ ok: false, error: "NOT_IN_ROOM" })
+    if (!sessions.isMaster(room, user.sub)) return cb({ ok: false, error: "FORBIDDEN" })
+
+    const existed = sessions.despawnNpcToken(room, parsed.data.tokenId)
+    if (!existed) return cb({ ok: false, error: "TOKEN_NOT_FOUND" })
+
+    io.to(currentSessionId!).emit("npc:despawned", { tokenId: parsed.data.tokenId })
+
+    cb({ ok: true, data: undefined })
+    console.log(`[npc:despawn] ${parsed.data.tokenId} da session ${currentSessionId}`)
   })
 
   // ── disconnect ────────────────────────────────────────────────────────────

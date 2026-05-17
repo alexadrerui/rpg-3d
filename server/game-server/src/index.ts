@@ -2,7 +2,7 @@ import express       from "express"
 import cors          from "cors"
 import { createServer } from "http"
 import { Server }    from "socket.io"
-import Redis         from "ioredis"
+import { Redis }     from "ioredis"
 import type { ServerToClientMap, ClientToServerMap } from "@rpg3d/schema"
 import { SessionManager }  from "./session-manager.js"
 import { authMiddleware }  from "./auth.js"
@@ -18,7 +18,7 @@ let redis: Redis | null = null
 if (REDIS_URL) {
   redis = new Redis(REDIS_URL, { lazyConnect: true, maxRetriesPerRequest: 2 })
   redis.on("connect", () => console.log("[redis] connected"))
-  redis.on("error",   (e) => console.warn("[redis] error:", e.message))
+  redis.on("error",   (e: Error) => console.warn("[redis] error:", e.message))
   redis.connect().catch(() => { redis = null })
 } else {
   console.log("[redis] REDIS_URL not set — running without persistence")

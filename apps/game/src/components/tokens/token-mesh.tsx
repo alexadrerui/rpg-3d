@@ -19,17 +19,18 @@ const TOKEN_COLORS: Record<string, string> = {
 }
 
 type Props = {
-  token:       TokenPosition
-  name:        string
-  role?:       "player" | "enemy" | "npc" | "master"
-  isOwn:       boolean
-  isMaster:    boolean
-  avatarType?: "none" | "image" | "model"
-  avatarUrl?:  string
-  onMove?:     (pos: { x: number; y: number; z: number }, rotation: number) => void
+  token:        TokenPosition
+  name:         string
+  role?:        "player" | "enemy" | "npc" | "master"
+  isOwn:        boolean
+  isMaster:     boolean
+  avatarType?:  "none" | "image" | "model"
+  avatarUrl?:   string
+  onMove?:      (pos: { x: number; y: number; z: number }, rotation: number) => void
+  onDespawn?:   () => void
 }
 
-export function TokenMesh({ token, name, role = "player", isOwn, isMaster, avatarType, avatarUrl, onMove }: Props) {
+export function TokenMesh({ token, name, role = "player", isOwn, isMaster, avatarType, avatarUrl, onMove, onDespawn }: Props) {
   const meshRef   = useRef<THREE.Group>(null)
   const isDragging = useRef(false)
   const dragPlane  = useRef(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0))
@@ -92,6 +93,8 @@ export function TokenMesh({ token, name, role = "player", isOwn, isMaster, avata
 
   const color = TOKEN_COLORS[role] ?? TOKEN_COLORS.player!
 
+  const canDespawn = !!onDespawn && isMaster
+
   return (
     <group
       ref={meshRef}
@@ -101,6 +104,7 @@ export function TokenMesh({ token, name, role = "player", isOwn, isMaster, avata
       onPointerUp={onPointerUp}
       onPointerEnter={() => setHovered(true)}
       onPointerLeave={() => setHovered(false)}
+      onDoubleClick={canDespawn ? (e) => { e.stopPropagation(); onDespawn() } : undefined}
     >
       {/* Base disc */}
       <Circle
@@ -136,18 +140,18 @@ export function TokenMesh({ token, name, role = "player", isOwn, isMaster, avata
         }
       </AvatarBoundary>
 
-      {/* Name label — só aparece ao hover */}
+      {/* Name label / despawn hint ao hover */}
       {hovered && (
         <Text
           position={[0, 0.7, 0]}
           fontSize={0.18}
-          color="#ffffff"
+          color={canDespawn ? "#ef4444" : "#ffffff"}
           anchorX="center"
           anchorY="bottom"
           outlineWidth={0.02}
           outlineColor="#000000"
         >
-          {name}
+          {canDespawn ? `${name} [2x]` : name}
         </Text>
       )}
 

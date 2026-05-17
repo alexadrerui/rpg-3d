@@ -8,8 +8,8 @@ import type { RpgSceneFile } from "@rpg3d/schema"
 export async function injectSceneIntoPascal(scene: RpgSceneFile): Promise<void> {
   const { useScene } = await import("@pascal-app/core")
   useScene.getState().setScene(
-    scene.scene.nodes as Parameters<typeof useScene.getState().setScene>[0],
-    scene.scene.rootNodeIds,
+    scene.scene.nodes as any,
+    scene.scene.rootNodeIds as any,
   )
 }
 
