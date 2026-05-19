@@ -1,4 +1,3 @@
-"use client"
 import { useState, useCallback, useEffect } from "react"
 import { getSocket } from "./socket.js"
 import type { EvDiceResult, EvRollDice, DiceFace } from "@rpg3d/schema"

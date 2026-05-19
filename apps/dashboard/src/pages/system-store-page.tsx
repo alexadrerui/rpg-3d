@@ -17,9 +17,13 @@ export function SystemStorePage() {
   const [buying,   setBuying]   = useState<string | null>(null)
   const [error,    setError]    = useState<string | null>(null)
 
-  useEffect(() => { if (token) setApiToken(token) }, [token])
+  useEffect(() => {
+    if (!token) { navigate("/"); return }
+    setApiToken(token)
+  }, [token, navigate])
 
   useEffect(() => {
+    if (!token) return
     api.list()
       .then(({ systems: s, credits: c }) => { setSystems(s); setCredits(c) })
       .finally(() => setLoading(false))

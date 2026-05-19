@@ -170,6 +170,26 @@ export const invites = {
 // Game Systems
 // ─────────────────────────────────────────────────────────────────────────────
 
+export type ApiSession = {
+  id: string; campaignId: string; sceneId?: string
+  startedAt: string; endedAt?: string
+  _count?: { logs: number }
+}
+export type ApiSessionLog = {
+  id: string; sessionId: string; campaignId: string
+  type: string; actorName?: string
+  data?: Record<string, unknown>
+  timestamp: string
+}
+
+export const sessions = {
+  list: (campaignId: string) =>
+    apiFetch<ApiSession[]>(`/campaigns/${campaignId}/sessions`),
+
+  getLog: (sessionId: string) =>
+    apiFetch<{ session: ApiSession; logs: ApiSessionLog[] }>(`/sessions/${sessionId}/log`),
+}
+
 export type ApiGameSystem = {
   id: string; name: string; description: string
   price: number; version: string; tags: string[]

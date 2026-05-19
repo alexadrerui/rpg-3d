@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useParams, useLocation } from "react-router-dom"
 import { useGameRoom }   from "@rpg3d/sync-client"
 import { useAuthStore }  from "../store/auth-store"
@@ -9,7 +9,10 @@ import { ParticipantsPanel }     from "../components/hud/participants-panel"
 import { MasterControls }        from "../components/hud/master-controls"
 import { TriggerNotifications, pushTriggerNotification } from "../components/hud/trigger-notifications"
 import { DiceOverlay } from "../components/dice/dice-overlay"
+import { CombatOverlay } from "../components/hud/combat-overlay"
+import type { CombatAbility } from "../components/hud/combat-overlay"
 import { useSceneStore } from "../store/scene-store"
+import { characters } from "../lib/api-client"
 
 const SERVER_URL = (import.meta as unknown as Record<string,Record<string,string>>).env?.VITE_GAME_SERVER_URL ?? "http://localhost:4001"
 
@@ -38,6 +41,27 @@ export function SessionPage() {
 
   const isMaster = auth.isMaster
 
+  // ── Estado de combate ──────────────────────────────────────────────────────
+  const [combatMode,       setCombatMode]       = useState(false)
+  const [charAbilities,    setCharAbilities]    = useState<CombatAbility[]>([])
+
+  // Carrega habilidades do personagem ao entrar na sessão
+  useEffect(() => {
+    if (!auth.characterId) return
+    characters.get(auth.characterId)
+      .then(char => {
+        const abs = char.sheetData?.combatAbilities as CombatAbility[] | undefined
+        if (Array.isArray(abs)) setCharAbilities(abs)
+      })
+      .catch(() => {/* ignora silenciosamente */})
+  }, [auth.characterId])
+
+  // Token próprio do jogador (para câmera de combate)
+  const ownToken = Object.values(room.tokens).find(
+    t => t.userId === auth.userId || t.characterId === auth.characterId
+  )
+
+  // ── Dados ──────────────────────────────────────────────────────────────────
   const [dice3d, setDice3d] = useState(
     () => localStorage.getItem("dice3d") !== "false",
   )
@@ -61,6 +85,8 @@ export function SessionPage() {
         onTokenMove={room.moveToken}
         onNpcSpawn={isMaster ? (data) => { room.spawnNpc(data).catch(console.error) } : undefined}
         onNpcDespawn={isMaster ? (id) => { room.despawnNpc(id).catch(console.error) } : undefined}
+        firstPersonMode={combatMode && !!ownToken}
+        firstPersonTokenId={ownToken?.characterId}
       />
 
       {/* ── HUD overlay ── */}
@@ -106,6 +132,27 @@ export function SessionPage() {
 
         {/* Overlay de física 3D — só renderiza quando ativado */}
         {dice3d && <DiceOverlay serverUrl={SERVER_URL} />}
+
+        {/* COMBATE — overlay de habilidades (jogador com token no mapa) */}
+        {combatMode && !isMaster && (
+          <CombatOverlay
+            abilities={charAbilities}
+            onExit={() => setCombatMode(false)}
+          />
+        )}
+
+        {/* Botão de entrar no modo combate — só para jogadores com token */}
+        {!combatMode && !isMaster && ownToken && (
+          <div className="absolute bottom-24 left-1/2 -translate-x-1/2 pointer-events-auto">
+            <button
+              onClick={() => setCombatMode(true)}
+              className="flex items-center gap-2 bg-neutral-950/85 hover:bg-neutral-900/90 text-neutral-400 hover:text-red-300 text-xs font-medium px-4 py-2 rounded-full border border-neutral-700/50 hover:border-red-900/60 transition-all backdrop-blur-sm shadow-lg"
+            >
+              <span>⚔</span>
+              <span>Modo combate</span>
+            </button>
+          </div>
+        )}
 
         {/* Transition overlay (fade/dissolve) */}
         <SceneTransitionOverlay transitionFx={room.activeScene?.transitionFx} />

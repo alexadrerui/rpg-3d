@@ -39,6 +39,7 @@ model Campaign {
   invites    CampaignInvite[]
   sessions   Session[]
   assets     Asset[]
+  logs       SessionLog[]
 }
 
 model Scene {
@@ -87,7 +88,37 @@ model Session {
   startedAt  DateTime  @default(now())
   endedAt    DateTime?
 
+  campaign Campaign    @relation(fields: [campaignId], references: [id])
+  logs     SessionLog[]
+}
+
+enum SessionEventType {
+  JOIN
+  LEAVE
+  CHAT
+  DICE
+  SCENE_LOAD
+  NPC_SPAWN
+  NPC_DESPAWN
+  NOTE_REVEAL
+  TRAP_DISARM
+  FOG_CLEAR
+}
+
+model SessionLog {
+  id         String           @id @default(cuid())
+  sessionId  String
+  campaignId String
+  type       SessionEventType
+  actorName  String?
+  data       Json?
+  timestamp  DateTime         @default(now())
+
+  session  Session  @relation(fields: [sessionId], references: [id])
   campaign Campaign @relation(fields: [campaignId], references: [id])
+
+  @@index([sessionId])
+  @@index([campaignId])
 }
 
 model Asset {

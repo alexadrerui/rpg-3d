@@ -1,12 +1,12 @@
 import { useState } from "react"
 import { clsx } from "clsx"
-import type { CharacterSheetProps } from "../../types.js"
+import type { CharacterSheetProps, CombatAbility } from "../../types.js"
 
 // ─────────────────────────────────────────────────────────────────────────────
-// D&D 5e — wizard de ficha em 5 etapas
+// D&D 5e — wizard de ficha em 6 etapas
 // ─────────────────────────────────────────────────────────────────────────────
 
-type Step = "basics" | "attributes" | "background" | "appearance" | "avatar"
+type Step = "basics" | "attributes" | "background" | "appearance" | "avatar" | "abilities"
 
 const STEPS: { key: Step; label: string; icon: string }[] = [
   { key: "basics",     label: "Raça e classe", icon: "⚔️" },
@@ -14,6 +14,7 @@ const STEPS: { key: Step; label: string; icon: string }[] = [
   { key: "background", label: "História",       icon: "📖" },
   { key: "appearance", label: "Aparência",      icon: "🎭" },
   { key: "avatar",     label: "Avatar 3D",      icon: "🧙" },
+  { key: "abilities",  label: "Habilidades",    icon: "✦" },
 ]
 
 export function Dnd5eCharacterSheet({ data, onSave, saving, readOnly }: CharacterSheetProps) {
@@ -49,7 +50,8 @@ export function Dnd5eCharacterSheet({ data, onSave, saving, readOnly }: Characte
         {step === "attributes" && <AttributesStep sheet={data} onSave={onSave} saving={saving} readOnly={readOnly} onNext={() => setStep("background")} onBack={() => setStep("basics")} />}
         {step === "background" && <BackgroundStep sheet={data} onSave={onSave} saving={saving} readOnly={readOnly} onNext={() => setStep("appearance")} onBack={() => setStep("attributes")} />}
         {step === "appearance" && <AppearanceStep sheet={data} onSave={onSave} saving={saving} readOnly={readOnly} onNext={() => setStep("avatar")} onBack={() => setStep("background")} />}
-        {step === "avatar"     && <AvatarStep     sheet={data} onSave={onSave} saving={saving} readOnly={readOnly} onBack={() => setStep("appearance")} />}
+        {step === "avatar"     && <AvatarStep     sheet={data} onSave={onSave} saving={saving} readOnly={readOnly} onNext={() => setStep("abilities")} onBack={() => setStep("appearance")} />}
+        {step === "abilities"  && <AbilitiesStep  sheet={data} onSave={onSave} saving={saving} readOnly={readOnly} onBack={() => setStep("avatar")} />}
       </div>
     </div>
   )
@@ -271,9 +273,9 @@ function AppearanceStep({ sheet, onSave, saving, readOnly, onBack, onNext }: {
 
 // ── Etapa 5: Avatar 3D ─────────────────────────────────────────────────────────
 
-function AvatarStep({ sheet, onSave, saving, readOnly, onBack }: {
+function AvatarStep({ sheet, onSave, saving, readOnly, onBack, onNext }: {
   sheet: Record<string, unknown>; onSave: (p: Record<string, unknown>) => Promise<void>
-  saving: boolean; readOnly?: boolean; onBack: () => void
+  saving: boolean; readOnly?: boolean; onBack: () => void; onNext?: () => void
 }) {
   const saved = sheet.avatar as { type?: string; url?: string } | undefined
   const [type, setType] = useState<"none" | "image" | "model">(
@@ -329,6 +331,102 @@ function AvatarStep({ sheet, onSave, saving, readOnly, onBack }: {
       {!readOnly && (
         <StepFooter saving={saving}
           onSave={() => onSave({ avatar: type === "none" ? { type: "none" } : { type, url } })}
+          onNext={onNext} onBack={onBack} showNext={!!onNext} showBack
+          nextLabel="Próximo →" />
+      )}
+    </div>
+  )
+}
+
+// ── Etapa 6: Habilidades de combate ────────────────────────────────────────────
+
+const RESOURCES = ["PD", "PM", "PA", "PE", "Ação", "Bônus", "Gratuito"]
+
+function AbilitiesStep({ sheet, onSave, saving, readOnly, onBack }: {
+  sheet: Record<string, unknown>; onSave: (p: Record<string, unknown>) => Promise<void>
+  saving: boolean; readOnly?: boolean; onBack: () => void
+}) {
+  const [abilities, setAbilities] = useState<CombatAbility[]>(
+    () => (sheet.combatAbilities as CombatAbility[] | undefined) ?? []
+  )
+
+  const add = () => setAbilities(prev => [...prev, {
+    id: crypto.randomUUID(), name: "", description: "", cost: 1, resource: "PD",
+  }])
+
+  const upd = (id: string, patch: Partial<CombatAbility>) =>
+    setAbilities(prev => prev.map(a => a.id === id ? { ...a, ...patch } : a))
+
+  const del = (id: string) =>
+    setAbilities(prev => prev.filter(a => a.id !== id))
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-medium text-neutral-200">Habilidades de combate</h2>
+          <p className="text-xs text-neutral-500 mt-0.5">Aparecem no painel de visão de combate.</p>
+        </div>
+        {!readOnly && (
+          <button onClick={add}
+            className="text-xs bg-purple-900/60 hover:bg-purple-800/60 text-purple-300 px-3 py-1.5 rounded-lg border border-purple-700/40 transition-colors">
+            + Adicionar
+          </button>
+        )}
+      </div>
+
+      {abilities.length === 0 && (
+        <div className="py-10 text-center text-neutral-600 text-sm">
+          {readOnly ? "Nenhuma habilidade cadastrada." : "Clique em '+ Adicionar' para criar habilidades de combate."}
+        </div>
+      )}
+
+      <div className="space-y-3">
+        {abilities.map(ab => (
+          <div key={ab.id} className="bg-neutral-900/80 border border-neutral-800 rounded-xl p-4 space-y-3">
+            <div className="flex gap-3 items-end">
+              <div className="flex-1">
+                <Field label="Nome">
+                  <SheetInput value={ab.name} onChange={v => upd(ab.id, { name: v })}
+                    placeholder="Assassinato Furtivo" disabled={readOnly} />
+                </Field>
+              </div>
+              <div style={{ width: 72 }}>
+                <Field label="Custo">
+                  <input type="number" min={0} max={99} value={ab.cost}
+                    onChange={e => upd(ab.id, { cost: Number(e.target.value) })}
+                    disabled={readOnly}
+                    className={`${inputCls} text-center`} />
+                </Field>
+              </div>
+              <div style={{ width: 100 }}>
+                <Field label="Recurso">
+                  <SheetSelect value={ab.resource} onChange={v => upd(ab.id, { resource: v })}
+                    options={RESOURCES} disabled={readOnly} />
+                </Field>
+              </div>
+              {!readOnly && (
+                <button onClick={() => del(ab.id)}
+                  className="mb-1 text-neutral-600 hover:text-red-400 transition-colors text-sm px-1 shrink-0">
+                  ✕
+                </button>
+              )}
+            </div>
+            <Field label="Descrição">
+              <textarea value={ab.description}
+                onChange={e => upd(ab.id, { description: e.target.value })}
+                disabled={readOnly}
+                className={`${inputCls} resize-none`}
+                rows={2}
+                placeholder="+3d8 de dano em um alvo desprevenido ou flanqueado." />
+            </Field>
+          </div>
+        ))}
+      </div>
+
+      {!readOnly && (
+        <StepFooter saving={saving}
+          onSave={() => onSave({ combatAbilities: abilities })}
           onBack={onBack} showBack finalStep />
       )}
     </div>

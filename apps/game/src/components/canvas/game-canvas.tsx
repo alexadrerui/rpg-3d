@@ -1,9 +1,10 @@
 import { Suspense, useEffect, useRef, useState, lazy } from "react"
 import { Canvas }             from "@react-three/fiber"
-import { Grid, Circle, Text } from "@react-three/drei"
+import { Grid, Circle, Text, Html } from "@react-three/drei"
 import * as THREE             from "three"
 import { useViewer }          from "@pascal-app/viewer"
 import { IsoCamera }          from "./iso-camera"
+import { ThirdPersonCamera }  from "./third-person-camera"
 import { FogOfWarOverlay }    from "./fog-of-war"
 import { WallCutaway }        from "./wall-cutaway"
 import { TokenMesh }          from "../tokens/token-mesh"
@@ -27,25 +28,35 @@ const PascalViewer = lazy(() =>
 // ─────────────────────────────────────────────────────────────────────────────
 
 type Props = {
-  activeScene:  ActiveScene | null
-  fogCells:     FogCell[]
-  tokens:       Record<string, TokenPosition>
-  npcTokens:    Record<string, NpcToken>
-  participants: Participant[]
-  isMaster:     boolean
-  onTokenMove:  (characterId: string, pos: { x: number; y: number; z: number }, rotation: number) => void
-  onNpcSpawn?:  (data: EvSpawnNpc) => void
-  onNpcDespawn?: (tokenId: string) => void
+  activeScene:       ActiveScene | null
+  fogCells:          FogCell[]
+  tokens:            Record<string, TokenPosition>
+  npcTokens:         Record<string, NpcToken>
+  participants:      Participant[]
+  isMaster:          boolean
+  onTokenMove:       (characterId: string, pos: { x: number; y: number; z: number }, rotation: number) => void
+  onNpcSpawn?:       (data: EvSpawnNpc) => void
+  onNpcDespawn?:     (tokenId: string) => void
+  firstPersonMode?:  boolean
+  firstPersonTokenId?: string
 }
 
 function npcAsToken(npc: NpcToken): TokenPosition {
   return { characterId: npc.tokenId, userId: "", position: npc.position, rotation: npc.rotation }
 }
 
-export function GameCanvas({ activeScene, fogCells, tokens, npcTokens, participants, isMaster, onTokenMove, onNpcSpawn, onNpcDespawn }: Props) {
+export function GameCanvas({
+  activeScene, fogCells, tokens, npcTokens, participants, isMaster,
+  onTokenMove, onNpcSpawn, onNpcDespawn,
+  firstPersonMode, firstPersonTokenId,
+}: Props) {
   const { load, clear, sceneFile, environment, loadState } = useSceneStore()
   const { characterId, userId } = useAuthStore()
   const [pascalReady, setPascalReady] = useState(false)
+
+  // Derivados para a câmera de combate
+  const fpToken  = firstPersonMode && firstPersonTokenId ? tokens[firstPersonTokenId] : undefined
+  const enemies  = Object.values(npcTokens).filter(t => t.role === "enemy")
 
   // ── 1. Configurar o viewer Pascal ──────────────────────────────────────────
   useEffect(() => {
@@ -94,8 +105,11 @@ export function GameCanvas({ activeScene, fogCells, tokens, npcTokens, participa
           <PascalViewer
             selectionManager="custom"   // desabilita seleção no game
           >
-            {/* R3F children do Viewer — câmera iso e fog de guerra ficam aqui */}
-            <IsoCamera config={camConfig} />
+            {/* Câmera: terceira pessoa em modo combate, isométrica no normal */}
+            {fpToken
+              ? <ThirdPersonCamera token={fpToken} enemies={enemies} />
+              : <IsoCamera config={camConfig} />
+            }
             <SceneEnvironment envConfig={envConfig} />
             <FogOfWarOverlay
               cells={fogCells}
@@ -155,7 +169,10 @@ export function GameCanvas({ activeScene, fogCells, tokens, npcTokens, participa
           gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping }}
           style={{ background: "#0a0010" }}
         >
-          <IsoCamera config={camConfig} />
+          {fpToken
+            ? <ThirdPersonCamera token={fpToken} enemies={enemies} />
+            : <IsoCamera config={camConfig} />
+          }
           <ambientLight intensity={0.15} />
           <directionalLight position={[10, 20, 10]} intensity={0.6} castShadow />
           <Grid
@@ -246,19 +263,25 @@ function NpcSpawnMarkers({ isMaster, onSpawn }: { isMaster: boolean; onSpawn?: (
 
 function NpcMarker({ node, onSpawn }: { node: SpawnNode; onSpawn?: (data: EvSpawnNpc) => void }) {
   const [hovered, setHovered] = useState(false)
-  const color = NPC_COLORS[node.forRole] ?? NPC_COLORS.any!
-  const label = node.label ?? (node.forRole === "npc" ? "NPC" : "Inimigo")
-  const canSpawn = !!onSpawn
+  const [open, setOpen]       = useState(false)
+  const [name, setName]       = useState("")
 
-  const handleClick = () => {
-    if (!canSpawn || (node.forRole !== "npc" && node.forRole !== "enemy")) return
-    onSpawn({ role: node.forRole, name: label, position: node.position, rotation: 0 })
+  const color       = NPC_COLORS[node.forRole] ?? NPC_COLORS.any!
+  const defaultName = node.label ?? (node.forRole === "npc" ? "NPC" : "Inimigo")
+  const canSpawn    = !!onSpawn && (node.forRole === "npc" || node.forRole === "enemy")
+
+  const handleOpen = () => { setName(defaultName); setOpen(true) }
+  const handleClose = () => setOpen(false)
+  const handleConfirm = () => {
+    if (!canSpawn) return
+    onSpawn({ role: node.forRole as "npc" | "enemy", name: name.trim() || defaultName, position: node.position, rotation: node.facing ?? 0 })
+    setOpen(false)
   }
 
   return (
     <group
       position={[node.position.x, 0, node.position.z]}
-      onClick={canSpawn ? handleClick : undefined}
+      onClick={canSpawn && !open ? (e) => { e.stopPropagation(); handleOpen() } : undefined}
       onPointerEnter={canSpawn ? () => setHovered(true) : undefined}
       onPointerLeave={canSpawn ? () => setHovered(false) : undefined}
     >
@@ -267,7 +290,7 @@ function NpcMarker({ node, onSpawn }: { node: SpawnNode; onSpawn?: (data: EvSpaw
         <meshStandardMaterial
           color={color}
           emissive={color}
-          emissiveIntensity={hovered ? 0.7 : 0.3}
+          emissiveIntensity={open ? 0.9 : hovered ? 0.7 : 0.3}
           roughness={0.5}
           opacity={0.75}
           transparent
@@ -279,18 +302,60 @@ function NpcMarker({ node, onSpawn }: { node: SpawnNode; onSpawn?: (data: EvSpaw
         <meshStandardMaterial color={color} opacity={0.25} transparent />
       </Circle>
 
-      {/* Label do spawn */}
-      <Text
-        position={[0, 0.6, 0]}
-        fontSize={0.2}
-        color={color}
-        anchorX="center"
-        anchorY="middle"
-        outlineWidth={0.03}
-        outlineColor="#000000"
-      >
-        {hovered ? `Spawnar ${label}` : label}
-      </Text>
+      {/* Label do spawn — oculto quando popup aberto */}
+      {!open && (
+        <Text
+          position={[0, 0.6, 0]}
+          fontSize={0.2}
+          color={color}
+          anchorX="center"
+          anchorY="middle"
+          outlineWidth={0.03}
+          outlineColor="#000000"
+        >
+          {hovered ? `+ ${defaultName}` : defaultName}
+        </Text>
+      )}
+
+      {/* Popup de confirmação de spawn */}
+      {open && (
+        <Html position={[0, 1.4, 0]} center distanceFactor={8} zIndexRange={[100, 0]}>
+          <div
+            className="bg-neutral-900 border border-neutral-700 rounded-xl p-3 shadow-2xl"
+            style={{ minWidth: 176 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="text-[11px] font-semibold mb-2" style={{ color }}>
+              {node.forRole === "enemy" ? "Inimigo" : "NPC"}
+            </p>
+            <input
+              autoFocus
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleConfirm()
+                if (e.key === "Escape") handleClose()
+              }}
+              placeholder={defaultName}
+              className="w-full bg-neutral-800 text-white text-sm rounded px-2 py-1.5 border border-neutral-600 outline-none focus:border-neutral-400 placeholder-neutral-500 mb-2"
+            />
+            <div className="flex gap-1.5">
+              <button
+                onClick={handleConfirm}
+                className="flex-1 bg-indigo-700 hover:bg-indigo-600 text-white text-xs font-medium rounded py-1.5 transition-colors"
+              >
+                Spawnar
+              </button>
+              <button
+                onClick={handleClose}
+                className="px-2 text-neutral-500 hover:text-neutral-200 text-xs transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+        </Html>
+      )}
     </group>
   )
 }

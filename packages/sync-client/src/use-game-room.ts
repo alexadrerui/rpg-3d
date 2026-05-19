@@ -1,4 +1,3 @@
-"use client"
 import { useEffect, useRef, useCallback } from "react"
 import { create }    from "zustand"
 import { getSocket } from "./socket.js"
@@ -134,8 +133,17 @@ export function useGameRoom(opts: UseGameRoomOptions) {
   const loadScene  = useCallback((data: EvLoadScene) =>
     new Promise<void>((res, rej) => getSocket(serverUrl).emit("scene:load", data, r => r.ok ? res() : rej(new Error(r.error)))), [serverUrl])
 
-  const moveToken  = useCallback((characterId: string, position: { x: number; y: number; z: number }, rotation: number) =>
-    getSocket(serverUrl).emit("token:move", { characterId, position, rotation }), [serverUrl])
+  const moveToken  = useCallback((characterId: string, position: { x: number; y: number; z: number }, rotation: number) => {
+    getSocket(serverUrl).emit("token:move", { characterId, position, rotation })
+    // Optimistic local update — server uses socket.to() which excludes sender
+    const state = useRoomStore.getState()
+    if (state.npcTokens[characterId]) {
+      state._moveNpc(characterId, position, rotation)
+    } else {
+      const participant = state.participants.find(p => p.characterId === characterId)
+      state._updateToken({ characterId, userId: participant?.userId ?? characterId, position, rotation })
+    }
+  }, [serverUrl])
 
   const revealNote = useCallback((triggerId: string, toAll = true) =>
     new Promise<void>((res, rej) => getSocket(serverUrl).emit("note:reveal", { triggerId, toAll }, r => r.ok ? res() : rej(new Error(r.error)))), [serverUrl])

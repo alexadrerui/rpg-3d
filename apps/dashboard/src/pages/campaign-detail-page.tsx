@@ -4,8 +4,10 @@ import {
   campaigns as campaignsApi,
   characters as charsApi,
   scenes as scenesApi,
+  sessions as sessionsApi,
   setApiToken,
   type ApiCampaign, type ApiScene, type ApiCharacter, type ApiUser,
+  type ApiSession, type ApiSessionLog,
 } from "../lib/api-client"
 import { useAuthStore } from "../store/auth-store"
 import { clsx } from "clsx"
@@ -29,6 +31,10 @@ export function CampaignDetailPage() {
   const [inviteUrl, setInviteUrl] = useState<string | null>(null)
   const [copying, setCopying]   = useState(false)
   const [starting, setStarting] = useState(false)
+  const [pastSessions, setPastSessions]   = useState<ApiSession[]>([])
+  const [expandedSession, setExpanded]    = useState<string | null>(null)
+  const [sessionLogs, setSessionLogs]     = useState<Record<string, ApiSessionLog[]>>({})
+  const [loadingLog, setLoadingLog]       = useState<string | null>(null)
 
   useEffect(() => { if (token) setApiToken(token) }, [token])
 
@@ -39,6 +45,11 @@ export function CampaignDetailPage() {
       .catch(err => setError((err as Error).message))
       .finally(() => setLoading(false))
   }, [id])
+
+  useEffect(() => {
+    if (!id || !token) return
+    sessionsApi.list(id).then(setPastSessions).catch(() => {})
+  }, [id, token])
 
   const handleApprove = async (charId: string) => {
     await charsApi.approve(charId)
@@ -74,6 +85,19 @@ export function CampaignDetailPage() {
       await navigator.clipboard.writeText(url)
       setInviteUrl(url)
     } finally { setCopying(false) }
+  }
+
+  const handleExpandSession = async (sessionId: string) => {
+    if (expandedSession === sessionId) { setExpanded(null); return }
+    setExpanded(sessionId)
+    if (!sessionLogs[sessionId]) {
+      setLoadingLog(sessionId)
+      try {
+        const { logs } = await sessionsApi.getLog(sessionId)
+        setSessionLogs(prev => ({ ...prev, [sessionId]: logs }))
+      } catch { /* silently fail */ }
+      finally { setLoadingLog(null) }
+    }
   }
 
   const handleStartSession = async () => {
@@ -220,6 +244,27 @@ export function CampaignDetailPage() {
             </div>
           )}
         </section>
+        {/* Sessions */}
+        <section className="space-y-4">
+          <h2 className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">Sessões anteriores</h2>
+
+          {pastSessions.length === 0 ? (
+            <EmptyState text="Nenhuma sessão registrada ainda." />
+          ) : (
+            <div className="space-y-2">
+              {pastSessions.map(s => (
+                <SessionRow
+                  key={s.id}
+                  session={s}
+                  expanded={expandedSession === s.id}
+                  logs={sessionLogs[s.id] ?? null}
+                  loadingLog={loadingLog === s.id}
+                  onToggle={() => handleExpandSession(s.id)}
+                />
+              ))}
+            </div>
+          )}
+        </section>
       </main>
     </div>
   )
@@ -260,6 +305,112 @@ function SceneRow({ scene, isMaster, onDelete }: {
           className="text-xs text-red-500 hover:text-red-400 border border-red-900/30 hover:border-red-700/50 px-2.5 py-1 rounded-lg transition-colors">
           Deletar
         </button>
+      )}
+    </div>
+  )
+}
+
+function formatDuration(startedAt: string, endedAt?: string): string {
+  if (!endedAt) return "—"
+  const mins = Math.floor((new Date(endedAt).getTime() - new Date(startedAt).getTime()) / 60000)
+  if (mins < 1) return "< 1min"
+  const h = Math.floor(mins / 60), m = mins % 60
+  return h > 0 ? `${h}h ${m}min` : `${mins}min`
+}
+
+const LOG_TYPE_META: Record<string, { label: string; cls: string }> = {
+  JOIN:        { label: "entrada",    cls: "bg-neutral-800 text-neutral-400" },
+  LEAVE:       { label: "saída",      cls: "bg-neutral-800 text-neutral-400" },
+  CHAT:        { label: "chat",       cls: "bg-blue-950 text-blue-400" },
+  DICE:        { label: "dado",       cls: "bg-yellow-950 text-yellow-400" },
+  SCENE_LOAD:  { label: "cena",       cls: "bg-purple-950 text-purple-400" },
+  NPC_SPAWN:   { label: "npc+",       cls: "bg-orange-950 text-orange-400" },
+  NPC_DESPAWN: { label: "npc-",       cls: "bg-orange-950/60 text-orange-500" },
+  NOTE_REVEAL: { label: "nota",       cls: "bg-green-950 text-green-400" },
+  TRAP_DISARM: { label: "armadilha",  cls: "bg-red-950 text-red-400" },
+  FOG_CLEAR:   { label: "névoa",      cls: "bg-sky-950 text-sky-400" },
+}
+
+function formatLogDesc(log: ApiSessionLog): string {
+  const d = (log.data ?? {}) as Record<string, unknown>
+  switch (log.type) {
+    case "JOIN":        return `entrou na sessão${d.isMaster ? " como mestre" : ""}`
+    case "LEAVE":       return `saiu da sessão`
+    case "CHAT":        return `"${String(d.content ?? "").slice(0, 80)}"`
+    case "DICE": {
+      const rolls = Array.isArray(d.rolls) ? (d.rolls as number[]).join(", ") : ""
+      const mod   = typeof d.modifier === "number" && d.modifier !== 0
+        ? (d.modifier > 0 ? `+${d.modifier}` : `${d.modifier}`) : ""
+      return `rolou ${d.diceCount}d${d.diceFaces}${mod}: [${rolls}] = ${d.total}${d.label ? ` (${d.label})` : ""}`
+    }
+    case "SCENE_LOAD":  return `carregou cena`
+    case "NPC_SPAWN":   return `invocou ${d.role ?? "NPC"} "${d.name ?? ""}"`
+    case "NPC_DESPAWN": return `removeu NPC`
+    case "NOTE_REVEAL": return `revelou uma nota`
+    case "TRAP_DISARM": return `desarmou uma armadilha`
+    case "FOG_CLEAR":   return `limpou a névoa de guerra`
+    default:            return log.type
+  }
+}
+
+function SessionRow({ session: s, expanded, logs, loadingLog, onToggle }: {
+  session: ApiSession; expanded: boolean
+  logs: ApiSessionLog[] | null; loadingLog: boolean
+  onToggle: () => void
+}) {
+  const logCount = s._count?.logs ?? (logs?.length ?? 0)
+  const date = new Date(s.startedAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" })
+  const time = new Date(s.startedAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+
+  return (
+    <div className="bg-neutral-900 border border-neutral-800 rounded-xl overflow-hidden">
+      <button
+        onClick={onToggle}
+        className="w-full flex items-center justify-between px-4 py-3 hover:bg-neutral-800/40 transition-colors text-left"
+      >
+        <div className="flex items-center gap-3">
+          <div>
+            <p className="text-sm font-medium text-neutral-200">{date} às {time}</p>
+            <p className="text-xs text-neutral-500 mt-0.5">
+              {formatDuration(s.startedAt, s.endedAt)} · {logCount} eventos
+            </p>
+          </div>
+          {!s.endedAt && (
+            <span className="text-xs px-2 py-0.5 bg-green-950 text-green-400 rounded border border-green-800/30">
+              ao vivo
+            </span>
+          )}
+        </div>
+        <span className="text-neutral-600 text-xs">{expanded ? "▲" : "▼"}</span>
+      </button>
+
+      {expanded && (
+        <div className="border-t border-neutral-800 px-4 py-3 max-h-80 overflow-y-auto">
+          {loadingLog ? (
+            <p className="text-xs text-neutral-600 py-2">Carregando log...</p>
+          ) : !logs || logs.length === 0 ? (
+            <p className="text-xs text-neutral-600 py-2">Nenhum evento registrado.</p>
+          ) : (
+            <div className="space-y-1">
+              {logs.map(log => {
+                const meta = LOG_TYPE_META[log.type] ?? { label: log.type, cls: "bg-neutral-800 text-neutral-500" }
+                const t = new Date(log.timestamp).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+                return (
+                  <div key={log.id} className="flex items-start gap-2 text-xs">
+                    <span className="text-neutral-600 shrink-0 w-10">{t}</span>
+                    <span className={`shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium ${meta.cls}`}>
+                      {meta.label}
+                    </span>
+                    {log.actorName && (
+                      <span className="text-neutral-400 shrink-0 font-medium">{log.actorName}</span>
+                    )}
+                    <span className="text-neutral-500 truncate">{formatLogDesc(log)}</span>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
       )}
     </div>
   )

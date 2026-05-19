@@ -17,8 +17,10 @@ const EFFECTIVE_SALT = SALT ?? "rpg3d-dev-salt-change-in-production"
 function normalizeIp(raw: string): string {
   const mapped = raw.match(/^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/)
   if (mapped) return mapped[1]!
-  // Remove porta no formato addr:port
-  return raw.replace(/:\d+$/, "")
+  // Remove porta apenas em IPv4 com porta (ex: "1.2.3.4:8080")
+  // IPv6 não tem porta sem colchetes, então não aplicamos replace em IPs com múltiplos ":"
+  if (/^\d{1,3}(?:\.\d{1,3}){3}:\d+$/.test(raw)) return raw.replace(/:\d+$/, "")
+  return raw
 }
 
 // Extrai o IP real do request respeitando proxies reversos

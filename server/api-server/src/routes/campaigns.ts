@@ -93,6 +93,27 @@ campaignRouter.post("/:id/invite", async (req, res) => {
   })
 })
 
+// ── GET /campaigns/:id/sessions ──────────────────────────────────────────────
+campaignRouter.get("/:id/sessions", async (req, res) => {
+  const campaign = await prisma.campaign.findUnique({ where: { id: req.params.id } })
+  if (!campaign) { res.status(404).json({ error: "NOT_FOUND" }); return }
+
+  const userId = req.user!.sub
+  const isMaster = campaign.masterId === userId
+  const isParticipant = isMaster ||
+    !!(await prisma.character.findFirst({ where: { campaignId: campaign.id, userId } }))
+  if (!isParticipant) { res.status(403).json({ error: "FORBIDDEN" }); return }
+
+  const sessions = await prisma.session.findMany({
+    where:   { campaignId: req.params.id },
+    orderBy: { startedAt: "desc" },
+    take:    30,
+    include: { _count: { select: { logs: true } } },
+  })
+
+  res.json(sessions)
+})
+
 // ── POST /campaigns/:id/session ───────────────────────────────────────────────
 // Gera um JWT de sessão de jogo com isMaster = true para o mestre
 campaignRouter.post("/:id/session", async (req, res) => {

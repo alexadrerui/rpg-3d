@@ -7,6 +7,14 @@ export interface CharacterSheetProps {
   readOnly?: boolean
 }
 
+export interface CombatAbility {
+  id:          string
+  name:        string
+  description: string
+  cost:        number
+  resource:    string  // "PD", "PM", "PA", "Ação", "Gratuito", etc.
+}
+
 export interface GameSystemMeta {
   id:          string
   name:        string

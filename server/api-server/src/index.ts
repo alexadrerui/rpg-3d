@@ -6,6 +6,8 @@ import { sceneRouter }                   from "./routes/scenes.js"
 import { characterRouter, inviteRouter } from "./routes/characters.js"
 import { assetRouter }                   from "./routes/assets.js"
 import { systemsRouter, seedSystems }    from "./routes/systems.js"
+import { sessionLogRouter }              from "./routes/session-log.js"
+import { internalRouter }               from "./routes/internal.js"
 
 const app  = express()
 const PORT = Number(process.env.API_SERVER_PORT ?? 4000)
@@ -24,6 +26,8 @@ app.use("/characters", characterRouter)
 app.use("/invites",    inviteRouter)
 app.use("/assets",     assetRouter)
 app.use("/systems",    systemsRouter)
+app.use("/sessions",   sessionLogRouter)
+app.use("/internal",   internalRouter)
 
 app.get("/health", (_req, res) => res.json({ status: "ok", service: "api-server" }))
 

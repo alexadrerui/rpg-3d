@@ -317,7 +317,9 @@ O projeto usa **Zod v4** (breaking changes em relação ao v3):
 | Fog of war com DataTexture shader | `apps/game/src/components/canvas/fog-of-war.tsx` |
 | Token 3D arrastável com pointer capture | `apps/game/src/components/tokens/token-mesh.tsx` |
 | Chat com 4 canais + mini-markdown | `apps/game/src/components/chat/chat-panel.tsx` |
-| Painel de dados d4–d% com histórico | `apps/game/src/components/dice/dice-panel.tsx` |
+| Painel de dados d4–d% com histórico + toggle 3D | `apps/game/src/components/dice/dice-panel.tsx` |
+| Física de dados 3D (Rapier) — geometrias, assentamento, temas, materiais PBR | `apps/game/src/components/dice/`, `apps/game/src/store/dice-settings-store.ts` |
+| Tokens NPC/enemy — spawn via popup, arrastar (mestre), despawn com duplo-clique, broadcast WS | `apps/game/src/components/canvas/game-canvas.tsx`, `packages/sync-client/src/use-game-room.ts` |
 | Notificações de triggers com detalhes de armadilha | `apps/game/src/components/hud/trigger-notifications.tsx` |
 | Controles do mestre com lista de cenas da API | `apps/game/src/components/hud/master-controls.tsx` |
 | Session page completa (HUD + canvas + WebSocket) | `apps/game/src/pages/session-page.tsx` |
@@ -354,10 +356,8 @@ O projeto usa **Zod v4** (breaking changes em relação ao v3):
 | `rpg-viewer` package completo | Viewer com câmera isométrica RPG própria, fog of war integrado, modo mestre vs jogador |
 | Upload de assets para object storage | Editor precisa de upload de .glb e áudio; hoje só aceita URLs externas |
 | Sistema de jogo custom | `campaign.systemId` existe no schema mas só D&D 5e está mapeado na ficha |
-| NPC/enemy tokens | `SpawnNode.forRole = "npc" | "enemy"` existe mas o game só renderiza tokens de players |
 | Gerenciamento de campanha no dashboard | `GET /campaigns/:id` retorna dados mas a página `/campaign/:id` só redireciona para campaigns |
 | Sessão salva / log de sessão | `Session` model existe no Prisma mas não há endpoint de log |
-| Física de dados 3D (Rapier) | `dice-engine` tem só lógica matemática; animação 3D com Rapier não implementada |
 | Modo first_person | `CameraConfig.mode = "first_person"` está no schema mas não na câmera |
 
 ---

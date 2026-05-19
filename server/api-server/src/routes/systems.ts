@@ -49,7 +49,14 @@ systemsRouter.post("/:id/purchase", requireAuth, async (req, res) => {
   if (existing) return res.status(400).json({ error: "ALREADY_OWNED" })
 
   if (system.price === 0) {
-    await prisma.userSystemPurchase.create({ data: { userId, systemId } })
+    try {
+      await prisma.userSystemPurchase.create({ data: { userId, systemId } })
+    } catch (e: unknown) {
+      if ((e as { code?: string }).code === "P2002") {
+        return res.status(400).json({ error: "ALREADY_OWNED" })
+      }
+      throw e
+    }
     const user = await prisma.user.findUnique({ where: { id: userId }, select: { credits: true } })
     return res.json({ ok: true, credits: user?.credits ?? 0 })
   }

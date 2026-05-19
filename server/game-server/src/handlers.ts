@@ -16,6 +16,7 @@ import {
 } from "@rpg3d/schema"
 import { rollDice }         from "@rpg3d/dice-engine"
 import { SessionManager }   from "./session-manager.js"
+import { logQueue }         from "./log-queue.js"
 import {
   isInsideTrigger,
   computeRevealedCells,
@@ -123,6 +124,14 @@ export function registerHandlers(
 
     cb({ ok: true, data: undefined })
 
+    logQueue.push({
+      sessionId:  sessionId,
+      campaignId: campaignId,
+      type:       "JOIN",
+      actorName:  user.name,
+      data:       { isMaster },
+    })
+
     // Se já tem cena ativa, manda o URL para o novo participante
     if (room.activeSceneUrl) {
       socket.emit("scene:loaded", {
@@ -173,6 +182,14 @@ export function registerHandlers(
 
     // Broadcast para TODOS na sala (incluindo remetente)
     io.to(currentSessionId!).emit("scene:loaded", { sceneId, sceneUrl, transitionFx })
+
+    logQueue.push({
+      sessionId:  currentSessionId!,
+      campaignId: room.campaignId,
+      type:       "SCENE_LOAD",
+      actorName:  user.name,
+      data:       { sceneId },
+    })
 
     cb({ ok: true, data: undefined })
     console.log(`[scene:load] ${sceneId} → session ${currentSessionId}`)
@@ -320,6 +337,15 @@ export function registerHandlers(
     } else {
       // general / game_log: todos na sala
       io.to(currentSessionId!).emit("chat:message", message)
+      if (channel === "general") {
+        logQueue.push({
+          sessionId:  currentSessionId!,
+          campaignId: room.campaignId,
+          type:       "CHAT",
+          actorName:  message.fromName,
+          data:       { content: content.slice(0, 200) },
+        })
+      }
     }
 
     cb({ ok: true, data: undefined })
@@ -366,6 +392,16 @@ export function registerHandlers(
       io.to(currentSessionId!).emit("dice:result", result)
     }
 
+    if (!isSecret) {
+      logQueue.push({
+        sessionId:  currentSessionId!,
+        campaignId: room.campaignId,
+        type:       "DICE",
+        actorName:  participant?.name ?? user.name,
+        data:       { diceCount, diceFaces, modifier, rolls, total, label },
+      })
+    }
+
     // Log no chat automaticamente
     const logMsg = {
       id:         randomUUID(),
@@ -404,6 +440,14 @@ export function registerHandlers(
       position:    trigger.position,
     })
 
+    logQueue.push({
+      sessionId:  currentSessionId!,
+      campaignId: room.campaignId,
+      type:       "NOTE_REVEAL",
+      actorName:  user.name,
+      data:       { triggerId: parsed.data.triggerId },
+    })
+
     cb({ ok: true, data: undefined })
     console.log(`[note:reveal] ${parsed.data.triggerId} by master`)
   })
@@ -427,6 +471,14 @@ export function registerHandlers(
       if (t && t.type === "trigger_trap") (t as { isDisarmed: boolean }).isDisarmed = true
     }
 
+    logQueue.push({
+      sessionId:  currentSessionId!,
+      campaignId: room.campaignId,
+      type:       "TRAP_DISARM",
+      actorName:  user.name,
+      data:       { triggerId: parsed.data.triggerId },
+    })
+
     cb({ ok: true, data: undefined })
     console.log(`[trap:disarm] ${parsed.data.triggerId} by master`)
   })
@@ -443,6 +495,13 @@ export function registerHandlers(
 
     sessions.clearFog(room)
     io.to(currentSessionId!).emit("fog:revealed", { cells: [] })
+
+    logQueue.push({
+      sessionId:  currentSessionId!,
+      campaignId: room.campaignId,
+      type:       "FOG_CLEAR",
+      actorName:  user.name,
+    })
 
     cb({ ok: true, data: undefined })
     console.log(`[fog:clear] session ${currentSessionId}`)
@@ -464,6 +523,14 @@ export function registerHandlers(
     sessions.spawnNpcToken(room, npc)
     io.to(currentSessionId!).emit("npc:spawned", npc)
 
+    logQueue.push({
+      sessionId:  currentSessionId!,
+      campaignId: room.campaignId,
+      type:       "NPC_SPAWN",
+      actorName:  user.name,
+      data:       { role: npc.role, name: npc.name, tokenId },
+    })
+
     cb({ ok: true, data: { tokenId } })
     console.log(`[npc:spawn] ${npc.role} "${npc.name}" (${tokenId}) na session ${currentSessionId}`)
   })
@@ -483,6 +550,14 @@ export function registerHandlers(
 
     io.to(currentSessionId!).emit("npc:despawned", { tokenId: parsed.data.tokenId })
 
+    logQueue.push({
+      sessionId:  currentSessionId!,
+      campaignId: room.campaignId,
+      type:       "NPC_DESPAWN",
+      actorName:  user.name,
+      data:       { tokenId: parsed.data.tokenId },
+    })
+
     cb({ ok: true, data: undefined })
     console.log(`[npc:despawn] ${parsed.data.tokenId} da session ${currentSessionId}`)
   })
@@ -494,18 +569,31 @@ export function registerHandlers(
     const room = sessions.get(currentSessionId)
     if (!room) return
 
+    const isMasterLeaving = sessions.isMaster(room, user.sub)
     sessions.leave(room, user.sub)
 
     const leaving = room.participants.get(user.sub)
     socket.to(currentSessionId).emit("room:participant", {
       userId:      user.sub,
       characterId: leaving?.characterId,
-      isMaster:    sessions.isMaster(room, user.sub),
+      isMaster:    isMasterLeaving,
       isOnline:    false,
       name:        user.name,
       avatarType:  leaving?.avatarType,
       avatarUrl:   leaving?.avatarUrl,
     })
+
+    logQueue.push({
+      sessionId:  currentSessionId,
+      campaignId: room.campaignId,
+      type:       "LEAVE",
+      actorName:  user.name,
+      data:       { isMaster: isMasterLeaving },
+    })
+
+    if (isMasterLeaving) {
+      logQueue.endSession(currentSessionId).catch(console.error)
+    }
 
     console.log(`[disconnect] ${user.name} saiu da session ${currentSessionId}`)
   })

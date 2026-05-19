@@ -25,8 +25,9 @@ export function DiceOverlay({ serverUrl }: Props) {
   const [roll, setRoll]       = useState<DiceResult | null>(null)
   const [phase, setPhase]     = useState<Phase>("rolling")
 
-  const seenId = useRef<string | null>(null)
-  const timers = useRef<ReturnType<typeof setTimeout>[]>([])
+  const seenId       = useRef<string | null>(null)
+  const timers       = useRef<ReturnType<typeof setTimeout>[]>([])
+  const transitioned = useRef(false)
 
   const clearTimers = () => { timers.current.forEach(clearTimeout); timers.current = [] }
 
@@ -36,24 +37,34 @@ export function DiceOverlay({ serverUrl }: Props) {
     timers.current.push(setTimeout(() => setVisible(false), EXIT_MS))
   }, [])
 
+  // Transition to result phase — called by timer fallback OR by onAllSettled, whichever fires first
+  const transitionToResult = useCallback(() => {
+    if (transitioned.current) return
+    transitioned.current = true
+    clearTimers()
+    const resultMs = display.autoHideDelay * 1000
+    setPhase("result")
+    timers.current.push(
+      setTimeout(() => setPhase("exit"),  resultMs),
+      setTimeout(() => setVisible(false), resultMs + EXIT_MS),
+    )
+  }, [display.autoHideDelay])
+
   useEffect(() => {
     if (!lastResult || lastResult.id === seenId.current) return
     seenId.current = lastResult.id
 
     const { roll: rollMs } = SPEED_MS[display.speed]
-    const resultMs = display.autoHideDelay * 1000
 
     clearTimers()
+    transitioned.current = false
     setRoll(lastResult)
     setPhase("rolling")
     setVisible(true)
 
-    timers.current.push(
-      setTimeout(() => setPhase("result"), rollMs),
-      setTimeout(() => setPhase("exit"),   rollMs + resultMs),
-      setTimeout(() => setVisible(false),  rollMs + resultMs + EXIT_MS),
-    )
-  }, [lastResult, display.speed, display.autoHideDelay])
+    // Fallback: transition to result after rollMs even if physics hasn't settled
+    timers.current.push(setTimeout(transitionToResult, rollMs))
+  }, [lastResult, display.speed, transitionToResult])
 
   useEffect(() => clearTimers, [])
 
@@ -90,6 +101,7 @@ export function DiceOverlay({ serverUrl }: Props) {
           appearance={appearance}
           velMul={forceMul.vel}
           angMul={forceMul.ang}
+          onAllSettled={transitionToResult}
         />
 
         {/* Result panel — fades in after rolling phase */}

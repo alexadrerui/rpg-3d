@@ -171,8 +171,8 @@ export function DicePanel({ serverUrl, characterId, dice3d, onToggleDice3d }: Pr
                 </div>
                 <span className={clsx(
                   "text-lg font-bold tabular-nums",
-                  r.total >= r.diceFaces ? "text-amber-400" :
-                  r.total <= r.diceCount  ? "text-red-400"  : "text-white",
+                  r.diceCount === 1 && r.total === r.diceFaces ? "text-amber-400" :
+                  r.diceCount === 1 && r.total === 1           ? "text-red-400"  : "text-white",
                 )}>
                   {r.total}
                 </span>
