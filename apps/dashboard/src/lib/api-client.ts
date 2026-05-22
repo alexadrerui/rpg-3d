@@ -3,13 +3,12 @@
 // Usado por apps/game e apps/dashboard
 // ─────────────────────────────────────────────────────────────────────────────
 
-const API_URL =
-  typeof import.meta !== "undefined" && (import.meta as unknown as Record<string, Record<string, string>>).env?.VITE_API_URL
-    ? (import.meta as unknown as Record<string, Record<string, string>>).env.VITE_API_URL
-    : "http://localhost:4000"
+const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:4000"
 
 // ── Token store simples (em memória + localStorage) ───────────────────────────
 let _token: string | null = null
+let _refreshToken: string | null = null
+let _refreshing = false
 
 export function setApiToken(token: string | null): void {
   _token = token
@@ -23,6 +22,18 @@ export function getApiToken(): string | null {
   return _token
 }
 
+export function setRefreshToken(token: string | null): void {
+  _refreshToken = token
+  if (token) localStorage.setItem("rpg3d-refresh-token", token)
+  else        localStorage.removeItem("rpg3d-refresh-token")
+}
+
+export function getRefreshToken(): string | null {
+  if (_refreshToken) return _refreshToken
+  _refreshToken = localStorage.getItem("rpg3d-refresh-token")
+  return _refreshToken
+}
+
 // ── Fetch base ────────────────────────────────────────────────────────────────
 async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   const token = getApiToken()
@@ -34,6 +45,34 @@ async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
       ...(init.headers ?? {}),
     },
   })
+
+  if (
+    res.status === 401 &&
+    !_refreshing &&
+    path !== "/auth/refresh" &&
+    path !== "/auth/login" &&
+    path !== "/auth/register"
+  ) {
+    const rt = getRefreshToken()
+    if (rt) {
+      _refreshing = true
+      try {
+        const refreshed = await apiFetch<{ token: string; refreshToken: string }>("/auth/refresh", {
+          method: "POST", body: JSON.stringify({ refreshToken: rt }),
+        })
+        setApiToken(refreshed.token)
+        setRefreshToken(refreshed.refreshToken)
+        _refreshing = false
+        return apiFetch<T>(path, init)
+      } catch {
+        _refreshing = false
+        setApiToken(null)
+        setRefreshToken(null)
+        throw Object.assign(new Error("SESSION_EXPIRED"), { status: 401 })
+      }
+    }
+  }
+
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }))
     throw Object.assign(new Error(err.error ?? "API_ERROR"), { status: res.status, data: err })
@@ -76,16 +115,26 @@ export type ApiSessionData = {
 
 export const auth = {
   register: (email: string, name: string, password: string) =>
-    apiFetch<{ token: string; user: ApiUser }>("/auth/register", {
+    apiFetch<{ token: string; refreshToken: string; user: ApiUser }>("/auth/register", {
       method: "POST", body: JSON.stringify({ email, name, password }),
     }),
 
   login: (email: string, password: string) =>
-    apiFetch<{ token: string; user: ApiUser }>("/auth/login", {
+    apiFetch<{ token: string; refreshToken: string; user: ApiUser }>("/auth/login", {
       method: "POST", body: JSON.stringify({ email, password }),
     }),
 
   me: () => apiFetch<ApiUser>("/auth/me"),
+
+  refresh: (refreshToken: string) =>
+    apiFetch<{ token: string; refreshToken: string }>("/auth/refresh", {
+      method: "POST", body: JSON.stringify({ refreshToken }),
+    }),
+
+  logout: (refreshToken: string) =>
+    apiFetch<void>("/auth/logout", {
+      method: "POST", body: JSON.stringify({ refreshToken }),
+    }),
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -24,8 +24,9 @@
   },
   "devDependencies": {
     "@pascal/typescript-config": "*",
-    "@types/node":  "^22.0.0",
-    "@types/react": "19.2.2",
+    "@types/node":     "^22.0.0",
+    "@types/react":    "19.2.2",
+    "@types/react-dom": "19.2.2",
     "vite":         "^6.3.5",
     "@vitejs/plugin-react": "^4.5.2",
     "typescript":   "6.0.2"

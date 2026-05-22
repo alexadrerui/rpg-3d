@@ -2,7 +2,7 @@ import { Router }      from "express"
 import { prisma }      from "../lib/prisma.js"
 import { requireAuth } from "../middleware/auth.js"
 
-export const sessionLogRouter = Router()
+export const sessionLogRouter: ReturnType<typeof Router> = Router()
 sessionLogRouter.use(requireAuth)
 
 // GET /sessions/:id/log — retorna sessão + entradas de log (para o dashboard)

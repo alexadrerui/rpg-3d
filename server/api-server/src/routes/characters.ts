@@ -1,10 +1,10 @@
 import { Router }        from "express"
 import { z }             from "zod"
+import { Prisma }        from "@prisma/client"
 import { prisma }        from "../lib/prisma.js"
-import { signToken }     from "../lib/jwt.js"
 import { requireAuth }   from "../middleware/auth.js"
 
-export const characterRouter = Router()
+export const characterRouter: ReturnType<typeof Router> = Router()
 characterRouter.use(requireAuth)
 
 // ── GET /characters?campaignId=:id ────────────────────────────────────────────
@@ -45,7 +45,7 @@ characterRouter.post("/", async (req, res) => {
   if (existing) { res.status(409).json({ error: "ALREADY_HAS_CHARACTER", character: existing }); return }
 
   const character = await prisma.character.create({
-    data: { ...parsed.data, userId: req.user!.sub },
+    data: { ...parsed.data, userId: req.user!.sub, sheetData: parsed.data.sheetData as Prisma.InputJsonValue },
   })
   res.status(201).json(character)
 })
@@ -89,7 +89,7 @@ characterRouter.patch("/:id/sheet", async (req, res) => {
 
   const updated = await prisma.character.update({
     where: { id: req.params.id },
-    data:  { sheetData: mergedSheet, name: parsed.data.name ?? character.name },
+    data:  { sheetData: mergedSheet as Prisma.InputJsonValue, name: parsed.data.name ?? character.name },
   })
   res.json(updated)
 })
@@ -127,7 +127,7 @@ characterRouter.post("/:id/reject", async (req, res) => {
 
 // ── POST /invites/:token/accept ───────────────────────────────────────────────
 // Aceitar convite — cria a primeira ficha em branco
-export const inviteRouter = Router()
+export const inviteRouter: ReturnType<typeof Router> = Router()
 inviteRouter.use(requireAuth)
 
 inviteRouter.post("/:token/accept", async (req, res) => {

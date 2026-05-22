@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react"
 import { useNavigate }         from "react-router-dom"
-import { campaigns as campaignsApi, gameSystems as systemsApi, setApiToken, auth as authApi, type ApiCampaign, type ApiGameSystem } from "../lib/api-client"
+import { campaigns as campaignsApi, gameSystems as systemsApi, setApiToken, setRefreshToken, auth as authApi, type ApiCampaign, type ApiGameSystem } from "../lib/api-client"
 import { useAuthStore }        from "../store/auth-store"
 import { clsx }                from "clsx"
 
@@ -37,10 +37,11 @@ function LoginPage({ onSuccess }: { onSuccess: (token: string, user: { id: strin
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault(); setLoading(true); setError(null)
     try {
-      const { token, user } = mode === "login"
+      const { token, refreshToken, user } = mode === "login"
         ? await authApi.login(email, password)
         : await authApi.register(email, name, password)
       setApiToken(token)
+      setRefreshToken(refreshToken)
       onSuccess(token, user)
     } catch (err: unknown) {
       const e = err as { data?: { error?: string } }

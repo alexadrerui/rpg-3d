@@ -1,13 +1,13 @@
-import { Router }         from "express"
+import { Router, type Request, type Response } from "express"
 import { z }             from "zod"
 import { Prisma }        from "@prisma/client"
 import { prisma }        from "../lib/prisma.js"
 
-export const internalRouter = Router()
+export const internalRouter: ReturnType<typeof Router> = Router()
 
 const SERVER_SECRET = process.env.SERVER_SECRET ?? "dev-server-secret"
 
-function checkSecret(req: { headers: Record<string, string | string[] | undefined> }, res: { status: (n: number) => { json: (v: unknown) => void } }): boolean {
+function checkSecret(req: Request, res: Response): boolean {
   if (req.headers["x-server-secret"] !== SERVER_SECRET) {
     res.status(401).json({ error: "UNAUTHORIZED" })
     return false
@@ -25,7 +25,7 @@ const LogEntrySchema = z.object({
 
 // POST /internal/session-log — batch insert log entries from game-server
 internalRouter.post("/session-log", async (req, res) => {
-  if (!checkSecret(req as never, res as never)) return
+  if (!checkSecret(req, res)) return
 
   const parsed = z.object({ entries: z.array(LogEntrySchema) }).safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return }
@@ -43,7 +43,7 @@ internalRouter.post("/session-log", async (req, res) => {
 
 // POST /internal/session-end — mark session as ended
 internalRouter.post("/session-end", async (req, res) => {
-  if (!checkSecret(req as never, res as never)) return
+  if (!checkSecret(req, res)) return
 
   const parsed = z.object({ sessionId: z.string() }).safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: "INVALID_PAYLOAD" }); return }

@@ -4,7 +4,7 @@ import { prisma }        from "../lib/prisma.js"
 import { requireAuth }   from "../middleware/auth.js"
 import { presignPut, assetPublicUrl } from "../lib/storage.js"
 
-export const assetRouter = Router()
+export const assetRouter: ReturnType<typeof Router> = Router()
 assetRouter.use(requireAuth)
 
 // ── POST /assets/presign ──────────────────────────────────────────────────────

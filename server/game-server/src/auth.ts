@@ -2,10 +2,12 @@ import jwt from "jsonwebtoken"
 import type { Socket } from "socket.io"
 
 export type JwtPayload = {
-  sub:         string    // userId
-  name:        string
-  campaignId?: string
-  isMaster?:   boolean
+  sub:          string
+  name:         string
+  email?:       string
+  isMaster?:    boolean
+  campaignId?:  string
+  characterId?: string
 }
 
 const JWT_SECRET = process.env.JWT_SECRET ?? "dev-secret-change-in-production"

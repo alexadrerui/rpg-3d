@@ -28,8 +28,28 @@ import {
 import type { JwtPayload }  from "./auth.js"
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Config de ambiente
+// ─────────────────────────────────────────────────────────────────────────────
+
+const API_URL       = process.env.API_URL       ?? "http://localhost:4000"
+const SERVER_SECRET = process.env.SERVER_SECRET ?? "dev-server-secret"
+const STORAGE_URL   = process.env.STORAGE_PUBLIC_URL ?? `${API_URL}/scenes`
+
+async function fetchSceneUrl(sceneId: string): Promise<string> {
+  try {
+    const res = await fetch(`${API_URL}/scenes/${sceneId}/url`, {
+      headers: { "x-server-secret": SERVER_SECRET },
+    })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const data = await res.json() as { url: string }
+    return data.url
+  } catch {
+    return `${STORAGE_URL}/${sceneId}.rpgscene`
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Cache de cenas carregadas (sceneId → triggers + walls + fog config)
-// Em produção: buscar na API. Aqui: cache em memória após primeiro load.
 // ─────────────────────────────────────────────────────────────────────────────
 
 type SceneData = {
@@ -39,11 +59,27 @@ type SceneData = {
   revealRadius: number
 }
 
-const sceneDataCache   = new Map<string, SceneData>()
+type CacheEntry = { data: SceneData; loadedAt: number }
+
+const SCENE_CACHE_TTL  = 1000 * 60 * 60       // 1h sem uso → expira
+const COOLDOWN_MAX_AGE = 1000 * 60 * 5        // 5 min → cooldown obsoleto
+
+const sceneDataCache   = new Map<string, CacheEntry>()
 const triggerCooldowns = new Map<string, number>()  // triggerId → timestamp
 
+setInterval(() => {
+  const now = Date.now()
+  for (const [id, entry] of sceneDataCache) {
+    if (now - entry.loadedAt > SCENE_CACHE_TTL) sceneDataCache.delete(id)
+  }
+  for (const [id, ts] of triggerCooldowns) {
+    if (now - ts > COOLDOWN_MAX_AGE) triggerCooldowns.delete(id)
+  }
+}, 1000 * 60 * 15)  // roda a cada 15 min
+
 async function fetchSceneData(sceneUrl: string, sceneId: string): Promise<SceneData> {
-  if (sceneDataCache.has(sceneId)) return sceneDataCache.get(sceneId)!
+  const cached = sceneDataCache.get(sceneId)
+  if (cached) return cached.data
   try {
     const res = await fetch(sceneUrl)
     const raw = await res.json() as {
@@ -58,7 +94,7 @@ async function fetchSceneData(sceneUrl: string, sceneId: string): Promise<SceneD
     const revealRadius = fogCfg?.revealRadius ?? 5
 
     const data: SceneData = { triggers, walls, fogMode, revealRadius }
-    sceneDataCache.set(sceneId, data)
+    sceneDataCache.set(sceneId, { data, loadedAt: Date.now() })
     if (walls.length > 0) console.log(`[scene] ${sceneId}: ${walls.length} wall segments extracted`)
     return data
   } catch {
@@ -161,19 +197,7 @@ export function registerHandlers(
 
     const { sceneId, transitionFx } = parsed.data
 
-    // Busca URL da cena na API (simplificado: usa variável de ambiente)
-    const apiUrl  = process.env.API_URL ?? "http://localhost:4000"
-    let sceneUrl: string
-
-    try {
-      const res  = await fetch(`${apiUrl}/scenes/${sceneId}/url`, { headers: { "x-server-secret": process.env.SERVER_SECRET ?? "dev-server-secret" } })
-      const data = await res.json() as { url: string }
-      sceneUrl = data.url
-    } catch {
-      // Dev fallback: monta URL direta do storage
-      const bucket = process.env.STORAGE_PUBLIC_URL ?? "http://localhost:4000/scenes"
-      sceneUrl = `${bucket}/${sceneId}.rpgscene`
-    }
+    const sceneUrl = await fetchSceneUrl(sceneId)
 
     sessions.setActiveScene(room, sceneId, sceneUrl)
 
@@ -253,16 +277,7 @@ export function registerHandlers(
 
           // Transição de cena automática
           if (trigger.type === "trigger_transition" && trigger.targetSceneId) {
-            const apiUrl = process.env.API_URL ?? "http://localhost:4000"
-            let targetUrl: string
-            try {
-              const res  = await fetch(`${apiUrl}/scenes/${trigger.targetSceneId}/url`, { headers: { "x-server-secret": process.env.SERVER_SECRET ?? "dev-server-secret" } })
-              const data = await res.json() as { url: string }
-              targetUrl  = data.url
-            } catch {
-              const bucket = process.env.STORAGE_PUBLIC_URL ?? "http://localhost:4000/scenes"
-              targetUrl    = `${bucket}/${trigger.targetSceneId}.rpgscene`
-            }
+            const targetUrl = await fetchSceneUrl(trigger.targetSceneId)
             sessions.setActiveScene(room, trigger.targetSceneId, targetUrl)
             io.to(currentSessionId!).emit("scene:loaded", {
               sceneId:      trigger.targetSceneId,
@@ -429,7 +444,7 @@ export function registerHandlers(
     if (!room) return cb({ ok: false, error: "NOT_IN_ROOM" })
     if (!sessions.isMaster(room, user.sub)) return cb({ ok: false, error: "FORBIDDEN" })
 
-    const triggers = room.activeSceneId ? (sceneDataCache.get(room.activeSceneId)?.triggers ?? []) : []
+    const triggers = room.activeSceneId ? (sceneDataCache.get(room.activeSceneId)?.data.triggers ?? []) : []
     const trigger  = triggers.find(t => t.id === parsed.data.triggerId)
     if (!trigger) return cb({ ok: false, error: "TRIGGER_NOT_FOUND" })
 
@@ -465,7 +480,7 @@ export function registerHandlers(
     sessions.disarmTrap(room, parsed.data.triggerId)
 
     // Atualiza o trigger no cache com isDisarmed = true
-    const triggers = room.activeSceneId ? sceneDataCache.get(room.activeSceneId)?.triggers : undefined
+    const triggers = room.activeSceneId ? sceneDataCache.get(room.activeSceneId)?.data.triggers : undefined
     if (triggers) {
       const t = triggers.find(t => t.id === parsed.data.triggerId)
       if (t && t.type === "trigger_trap") (t as { isDisarmed: boolean }).isDisarmed = true

@@ -2,7 +2,7 @@ import { Router } from "express"
 import { prisma }  from "../lib/prisma.js"
 import { requireAuth } from "../middleware/auth.js"
 
-export const systemsRouter = Router()
+export const systemsRouter: ReturnType<typeof Router> = Router()
 
 // GET /systems — lista sistemas com isPurchased e saldo de créditos
 systemsRouter.get("/", requireAuth, async (req, res) => {

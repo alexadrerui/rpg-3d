@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react"
 import { useParams, useNavigate } from "react-router-dom"
-import { invites, setApiToken, auth as authApi, type ApiCampaign, type ApiCharacter } from "../lib/api-client"
+import { invites, setApiToken, setRefreshToken, auth as authApi, type ApiCampaign, type ApiCharacter } from "../lib/api-client"
 import { useAuthStore } from "../store/auth-store"
 import { clsx } from "clsx"
 
@@ -98,8 +98,8 @@ function QuickLogin({ onSuccess }: { onSuccess: (token: string, user: { id: stri
   const handle = async (e: React.FormEvent) => {
     e.preventDefault(); setLoading(true); setError(null)
     try {
-      const { token, user } = await authApi.login(email, password)
-      setApiToken(token); onSuccess(token, user)
+      const { token, refreshToken, user } = await authApi.login(email, password)
+      setApiToken(token); setRefreshToken(refreshToken); onSuccess(token, user)
     } catch { setError("Credenciais inválidas") }
     finally { setLoading(false) }
   }

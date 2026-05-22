@@ -3,7 +3,7 @@ import { z }             from "zod"
 import { prisma }        from "../lib/prisma.js"
 import { requireAuth }   from "../middleware/auth.js"
 
-export const sceneRouter = Router()
+export const sceneRouter: ReturnType<typeof Router> = Router()
 
 // ── GET /scenes/:id/url ───────────────────────────────────────────────────────
 // Endpoint interno chamado pelo game-server para obter a URL do .rpgscene

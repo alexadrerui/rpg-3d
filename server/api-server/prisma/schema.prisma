@@ -22,6 +22,7 @@ model User {
   invites         CampaignInvite[]
   uploadedAssets  Asset[]
   systemPurchases UserSystemPurchase[]
+  refreshTokens   RefreshToken[]
 }
 
 model Campaign {
@@ -163,4 +164,14 @@ model UserSystemPurchase {
   system GameSystemCatalog @relation(fields: [systemId], references: [id])
 
   @@unique([userId, systemId])
+}
+
+model RefreshToken {
+  id        String    @id @default(cuid())
+  token     String    @unique
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
 }

@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { auth as authApi, campaigns as campaignsApi, characters as charsApi, setApiToken, type ApiCampaign } from "../lib/api-client"
+import { auth as authApi, campaigns as campaignsApi, characters as charsApi, setApiToken, setRefreshToken, type ApiCampaign } from "../lib/api-client"
 import { useAuthStore } from "../store/auth-store"
 import { clsx } from "clsx"
 
@@ -69,9 +69,10 @@ function LoginForm({ onSuccess }: { onSuccess: (token: string, user: { id: strin
     e.preventDefault()
     setLoading(true); setError(null)
     try {
-      const { token, user } = mode === "login"
+      const { token, refreshToken, user } = mode === "login"
         ? await authApi.login(email, password)
         : await authApi.register(email, name, password)
+      setRefreshToken(refreshToken)
       onSuccess(token, user)
     } catch (err: unknown) {
       const e = err as { data?: { error?: string } }

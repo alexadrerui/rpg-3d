@@ -4,7 +4,7 @@ import { prisma }        from "../lib/prisma.js"
 import { signToken }     from "../lib/jwt.js"
 import { requireAuth }   from "../middleware/auth.js"
 
-export const campaignRouter = Router()
+export const campaignRouter: ReturnType<typeof Router> = Router()
 campaignRouter.use(requireAuth)
 
 const CreateCampaignSchema = z.object({
