@@ -11,7 +11,7 @@ assetRouter.use(requireAuth)
 // Gera uma URL pré-assinada para upload direto ao object storage.
 // Cria o registro Asset (confirmed=false) antes do upload acontecer.
 
-const ALLOWED_MIME_PREFIXES = ["model/", "image/", "audio/", "application/json"]
+const ALLOWED_MIME_PREFIXES = ["model/", "image/", "audio/", "video/", "application/json"]
 
 const PresignSchema = z.object({
   campaignId: z.string(),

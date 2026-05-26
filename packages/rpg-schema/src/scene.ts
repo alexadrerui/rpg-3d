@@ -29,7 +29,30 @@ export const AssetManifest = z.object({
   models:   z.array(AssetRef).default([]),   // glTF / GLB
   textures: z.array(AssetRef).default([]),   // WebP / PNG / HDR
   audio:    z.array(AssetRef).default([]),   // MP3 / OGG
+  videos:   z.array(AssetRef).default([]),   // MP4 / WEBM / AVI
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MEDIA CONFIG — playlist de áudio e configuração de vídeo da cena
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const PlaylistItem = z.object({
+  assetId:  z.string(),
+  url:      z.string(),
+  name:     z.string().optional(),
+  mimeType: z.string().optional(),
+})
+
+export const MediaConfig = z.object({
+  playlist: z.array(PlaylistItem).default([]),
+  shuffle:  z.boolean().default(false),
+  loop:     z.boolean().default(true),
+  autoPlay: z.boolean().default(false),
+  volume:   z.number().min(0).max(1).default(0.7),
+})
+
+export type PlaylistItem = z.infer<typeof PlaylistItem>
+export type MediaConfig  = z.infer<typeof MediaConfig>
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PASCAL NODE SNAPSHOT
@@ -66,6 +89,9 @@ export const RpgSceneFile = z.object({
 
   // Ambiente: névoa de guerra, luz, câmera, atmosfera
   environment: EnvironmentConfig,
+
+  // Configuração de mídia: playlist de áudio da cena
+  media: MediaConfig.optional(),
 
   // Estado de runtime — NÃO persistido no arquivo final,
   // existe só durante uma sessão ao vivo no Redis
@@ -111,7 +137,7 @@ export function getTriggersOfType<T extends AnyTriggerNode["type"]>(
   )
 }
 
-export type SceneMeta        = z.infer<typeof SceneMeta>
-export type AssetManifest    = z.infer<typeof AssetManifest>
+export type SceneMeta          = z.infer<typeof SceneMeta>
+export type AssetManifest      = z.infer<typeof AssetManifest>
 export type PascalNodeSnapshot = z.infer<typeof PascalNodeSnapshot>
-export type RpgSceneFile     = z.infer<typeof RpgSceneFile>
+export type RpgSceneFile       = z.infer<typeof RpgSceneFile>

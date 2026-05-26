@@ -12,6 +12,8 @@ import {
   EvRevealNote,
   EvDisarmTrap,
   EvClearFog,
+  EvMediaPlay,
+  EvVideoPlay,
   type AnyTriggerNode,
 } from "@rpg3d/schema"
 import { rollDice }         from "@rpg3d/dice-engine"
@@ -180,6 +182,14 @@ export function registerHandlers(
     // Restaura NPC tokens existentes na room
     for (const npc of sessions.getNpcTokens(room)) {
       socket.emit("npc:spawned", npc)
+    }
+
+    // Restaura estado de mídia e vídeo
+    if (room.media.playing || room.media.trackUrl) {
+      socket.emit("media:state", room.media)
+    }
+    if (room.video.url) {
+      socket.emit("video:state", room.video)
     }
 
     console.log(`[room:join] ${user.name} → session ${sessionId} (master: ${isMaster})`)
@@ -575,6 +585,122 @@ export function registerHandlers(
 
     cb({ ok: true, data: undefined })
     console.log(`[npc:despawn] ${parsed.data.tokenId} da session ${currentSessionId}`)
+  })
+
+  // ── media:play ────────────────────────────────────────────────────────────
+
+  socket.on("media:play", (raw, cb) => {
+    const parsed = EvMediaPlay.safeParse(raw)
+    if (!parsed.success) return cb({ ok: false, error: "INVALID_PAYLOAD" })
+
+    const room = currentSessionId ? sessions.get(currentSessionId) : null
+    if (!room) return cb({ ok: false, error: "NOT_IN_ROOM" })
+    if (!sessions.isMaster(room, user.sub)) return cb({ ok: false, error: "FORBIDDEN" })
+
+    const idx = parsed.data.trackIndex ?? room.media.trackIndex
+    sessions.setMedia(room, { playing: true, trackIndex: idx })
+    io.to(currentSessionId!).emit("media:state", room.media)
+
+    cb({ ok: true, data: undefined })
+  })
+
+  // ── media:pause ───────────────────────────────────────────────────────────
+
+  socket.on("media:pause", (_raw, cb) => {
+    const room = currentSessionId ? sessions.get(currentSessionId) : null
+    if (!room) return cb({ ok: false, error: "NOT_IN_ROOM" })
+    if (!sessions.isMaster(room, user.sub)) return cb({ ok: false, error: "FORBIDDEN" })
+
+    sessions.setMedia(room, { playing: false })
+    io.to(currentSessionId!).emit("media:state", room.media)
+    cb({ ok: true, data: undefined })
+  })
+
+  // ── media:next ────────────────────────────────────────────────────────────
+
+  socket.on("media:next", (_raw, cb) => {
+    const room = currentSessionId ? sessions.get(currentSessionId) : null
+    if (!room) return cb({ ok: false, error: "NOT_IN_ROOM" })
+    if (!sessions.isMaster(room, user.sub)) return cb({ ok: false, error: "FORBIDDEN" })
+
+    sessions.setMedia(room, { trackIndex: room.media.trackIndex + 1, playing: true })
+    io.to(currentSessionId!).emit("media:state", room.media)
+    cb({ ok: true, data: undefined })
+  })
+
+  // ── media:prev ────────────────────────────────────────────────────────────
+
+  socket.on("media:prev", (_raw, cb) => {
+    const room = currentSessionId ? sessions.get(currentSessionId) : null
+    if (!room) return cb({ ok: false, error: "NOT_IN_ROOM" })
+    if (!sessions.isMaster(room, user.sub)) return cb({ ok: false, error: "FORBIDDEN" })
+
+    const prevIdx = Math.max(0, room.media.trackIndex - 1)
+    sessions.setMedia(room, { trackIndex: prevIdx, playing: true })
+    io.to(currentSessionId!).emit("media:state", room.media)
+    cb({ ok: true, data: undefined })
+  })
+
+  // ── media:stop ────────────────────────────────────────────────────────────
+
+  socket.on("media:stop", (_raw, cb) => {
+    const room = currentSessionId ? sessions.get(currentSessionId) : null
+    if (!room) return cb({ ok: false, error: "NOT_IN_ROOM" })
+    if (!sessions.isMaster(room, user.sub)) return cb({ ok: false, error: "FORBIDDEN" })
+
+    sessions.setMedia(room, { playing: false, trackIndex: 0, trackUrl: null, trackName: null })
+    io.to(currentSessionId!).emit("media:state", room.media)
+    cb({ ok: true, data: undefined })
+  })
+
+  // ── video:play ────────────────────────────────────────────────────────────
+
+  socket.on("video:play", (raw, cb) => {
+    const parsed = EvVideoPlay.safeParse(raw)
+    if (!parsed.success) return cb({ ok: false, error: "INVALID_PAYLOAD" })
+
+    const room = currentSessionId ? sessions.get(currentSessionId) : null
+    if (!room) return cb({ ok: false, error: "NOT_IN_ROOM" })
+    if (!sessions.isMaster(room, user.sub)) return cb({ ok: false, error: "FORBIDDEN" })
+
+    sessions.setVideo(room, {
+      playing:            true,
+      url:                parsed.data.url,
+      name:               parsed.data.name ?? null,
+      mode:               parsed.data.mode,
+      transitionIn:       parsed.data.transitionIn,
+      transitionOut:      parsed.data.transitionOut,
+      transitionDuration: parsed.data.transitionDuration,
+      overlayOpacity:     parsed.data.overlayOpacity,
+      overlayBlend:       parsed.data.overlayBlend,
+    })
+    io.to(currentSessionId!).emit("video:state", room.video)
+    cb({ ok: true, data: undefined })
+    console.log(`[video:play] ${parsed.data.url} mode=${parsed.data.mode} → session ${currentSessionId}`)
+  })
+
+  // ── video:pause ───────────────────────────────────────────────────────────
+
+  socket.on("video:pause", (_raw, cb) => {
+    const room = currentSessionId ? sessions.get(currentSessionId) : null
+    if (!room) return cb({ ok: false, error: "NOT_IN_ROOM" })
+    if (!sessions.isMaster(room, user.sub)) return cb({ ok: false, error: "FORBIDDEN" })
+
+    sessions.setVideo(room, { playing: false })
+    io.to(currentSessionId!).emit("video:state", room.video)
+    cb({ ok: true, data: undefined })
+  })
+
+  // ── video:stop ────────────────────────────────────────────────────────────
+
+  socket.on("video:stop", (_raw, cb) => {
+    const room = currentSessionId ? sessions.get(currentSessionId) : null
+    if (!room) return cb({ ok: false, error: "NOT_IN_ROOM" })
+    if (!sessions.isMaster(room, user.sub)) return cb({ ok: false, error: "FORBIDDEN" })
+
+    sessions.setVideo(room, { playing: false, url: null, name: null, mode: null, transitionIn: null, transitionOut: null, transitionDuration: null, overlayOpacity: null, overlayBlend: null })
+    io.to(currentSessionId!).emit("video:state", room.video)
+    cb({ ok: true, data: undefined })
   })
 
   // ── disconnect ────────────────────────────────────────────────────────────

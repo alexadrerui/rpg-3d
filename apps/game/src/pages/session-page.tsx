@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useParams, useLocation } from "react-router-dom"
 import { useGameRoom }   from "@rpg3d/sync-client"
 import { useAuthStore }  from "../store/auth-store"
@@ -10,6 +10,9 @@ import { MasterControls }        from "../components/hud/master-controls"
 import { TriggerNotifications, pushTriggerNotification } from "../components/hud/trigger-notifications"
 import { DiceOverlay } from "../components/dice/dice-overlay"
 import { CombatOverlay } from "../components/hud/combat-overlay"
+import { MediaPlayer }        from "../components/hud/media-player"
+import { VideoPlayer }        from "../components/hud/video-player"
+import { CinematicOverlay }   from "../components/hud/cinematic-overlay"
 import type { CombatAbility } from "../components/hud/combat-overlay"
 import { useSceneStore } from "../store/scene-store"
 import { characters } from "../lib/api-client"
@@ -20,7 +23,7 @@ export function SessionPage() {
   const { sessionId }  = useParams<{ sessionId: string }>()
   const { state }      = useLocation() as { state?: { campaignId?: string } }
   const auth           = useAuthStore()
-  const { disarmTrap, revealNote } = useSceneStore()
+  const { disarmTrap, revealNote, sceneFile } = useSceneStore()
 
   const room = useGameRoom({
     sessionId:   sessionId ?? "",
@@ -41,6 +44,21 @@ export function SessionPage() {
 
   const isMaster = auth.isMaster
 
+  // ── Mídia — playlist e vídeos da cena ─────────────────────────────────────
+  const scenePlaylist  = useMemo(() => sceneFile?.media?.playlist ?? [], [sceneFile])
+  const sceneVideos    = useMemo(() => sceneFile?.assets?.videos ?? [], [sceneFile])
+  const defaultVolume  = sceneFile?.media?.volume ?? 0.7
+
+  // AutoPlay ao carregar cena (se master e configurado)
+  useEffect(() => {
+    if (!isMaster) return
+    if (!sceneFile?.media?.autoPlay || scenePlaylist.length === 0) return
+    room.playMedia(0).catch(() => {})
+  }, [sceneFile?.meta?.id])
+
+  // ── Dim do jogo para modo cinematic ───────────────────────────────────────
+  const [dimGame, setDimGame] = useState(false)
+
   // ── Estado de combate ──────────────────────────────────────────────────────
   const [combatMode,       setCombatMode]       = useState(false)
   const [charAbilities,    setCharAbilities]    = useState<CombatAbility[]>([])
@@ -56,9 +74,11 @@ export function SessionPage() {
       .catch(() => {/* ignora silenciosamente */})
   }, [auth.characterId])
 
-  // Token próprio do jogador (para câmera de combate)
-  const ownToken = Object.values(room.tokens).find(
-    t => t.userId === auth.userId || t.characterId === auth.characterId
+  const ownToken = useMemo(
+    () => Object.values(room.tokens).find(
+      t => t.userId === auth.userId || t.characterId === auth.characterId
+    ),
+    [room.tokens, auth.userId, auth.characterId],
   )
 
   // ── Dados ──────────────────────────────────────────────────────────────────
@@ -73,6 +93,12 @@ export function SessionPage() {
 
   return (
     <div className="h-screen w-screen relative overflow-hidden bg-neutral-950 select-none">
+
+      {/* ── Backdrop de escurecimento para modo cinematic ── */}
+      <div
+        className="absolute inset-0 bg-black transition-opacity duration-500 pointer-events-none"
+        style={{ zIndex: 60, opacity: dimGame ? 1 : 0 }}
+      />
 
       {/* ── Canvas 3D ── */}
       <GameCanvas
@@ -154,9 +180,81 @@ export function SessionPage() {
           </div>
         )}
 
+        {/* MÍDIA — player de playlist (bottom center, acima do botão de combate) */}
+        {(room.mediaState?.playing || scenePlaylist.length > 0 || isMaster) && scenePlaylist.length > 0 && (
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 pointer-events-auto">
+            <MediaPlayer
+              mediaState={room.mediaState}
+              playlist={scenePlaylist}
+              isMaster={isMaster}
+              volume={defaultVolume}
+              onPlay={(idx) => room.playMedia(idx).catch(console.error)}
+              onPause={() => room.pauseMedia().catch(console.error)}
+              onNext={() => room.nextTrack().catch(console.error)}
+              onPrev={() => room.prevTrack().catch(console.error)}
+              onStop={() => room.stopMedia().catch(console.error)}
+            />
+          </div>
+        )}
+
+        {/* VÍDEO — routing por modo */}
+        {(() => {
+          const vs = room.videoState
+          const vMode = vs?.mode
+
+          // Jogadores não veem VideoPlayer em cinematic/overlay — CinematicOverlay cobre tudo
+          if (!isMaster && (vMode === "cinematic" || vMode === "overlay")) return null
+
+          return isMaster ? (
+            <div className="absolute bottom-24 right-4 pointer-events-auto">
+              <VideoPlayer
+                videoState={room.videoState}
+                videoAssets={sceneVideos}
+                isMaster={isMaster}
+                onPlay={(data) => room.playVideo(data).catch(console.error)}
+                onPause={() => room.pauseVideo().catch(console.error)}
+                onStop={() => room.stopVideo().catch(console.error)}
+              />
+            </div>
+          ) : (vs?.url ? (
+            <div className="pointer-events-auto">
+              <VideoPlayer
+                videoState={room.videoState}
+                videoAssets={sceneVideos}
+                isMaster={false}
+                onPlay={() => {}}
+                onPause={() => {}}
+                onStop={() => {}}
+              />
+            </div>
+          ) : null)
+        })()}
+
+
         {/* Transition overlay (fade/dissolve) */}
         <SceneTransitionOverlay transitionFx={room.activeScene?.transitionFx} />
       </div>
+
+      {/* ── CinematicOverlay — fixed, z-index acima do game ── */}
+      {(room.videoState?.mode === "cinematic" || room.videoState?.mode === "overlay") && (
+        <CinematicOverlay
+          videoState={room.videoState}
+          onDimGame={setDimGame}
+        />
+      )}
+
+      {/* ── Botão de parada para o mestre em modo cinematic/overlay (fixed, acima de tudo) ── */}
+      {isMaster && (room.videoState?.mode === "cinematic" || room.videoState?.mode === "overlay") && room.videoState?.url && (
+        <button
+          type="button"
+          onClick={() => room.stopVideo().catch(console.error)}
+          className="fixed top-4 right-4 flex items-center gap-2 bg-neutral-950/90 hover:bg-red-950/80 text-neutral-400 hover:text-red-300 text-xs font-medium px-3 py-1.5 rounded-lg border border-neutral-700/50 hover:border-red-900/60 transition-all backdrop-blur-sm shadow-lg"
+          style={{ zIndex: 82 }}
+        >
+          <span>■</span>
+          <span>Parar vídeo</span>
+        </button>
+      )}
     </div>
   )
 }

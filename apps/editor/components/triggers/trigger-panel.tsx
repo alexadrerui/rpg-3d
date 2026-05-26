@@ -1,7 +1,7 @@
 "use client"
 import { clsx }             from "clsx"
 import { useTriggerStore }  from "../../store/trigger-store"
-import type { AnyTriggerNode, NoteNode, TrapNode, SpawnNode } from "@rpg3d/schema"
+import type { AnyTriggerNode, NoteNode, TrapNode, SpawnNode, Vec3 } from "@rpg3d/schema"
 
 export function TriggerPanel() {
   const { triggers, selectedId, setSelectedId, updateTrigger, removeTrigger } = useTriggerStore()
@@ -59,8 +59,43 @@ function TriggerList() {
 }
 
 function BaseFields({ trigger, onUpdate }: { trigger: AnyTriggerNode; onUpdate: (p: Partial<AnyTriggerNode>) => void }) {
+  const { setActiveTool } = useTriggerStore()
+
+  const updatePos = (axis: keyof Vec3, value: number) =>
+    onUpdate({ position: { ...trigger.position, [axis]: value } } as Partial<AnyTriggerNode>)
+
+  type PlaceTool = "note" | "trap" | "spawn" | "transition" | "ambient_audio"
+  const replaceTool = trigger.type.replace("trigger_", "") as PlaceTool
+
   return (
     <section className="space-y-3">
+
+      {/* Posição no mundo */}
+      <div className="space-y-1">
+        <Label>Posição no mundo</Label>
+        <div className="flex gap-2 items-end">
+          <Field label="X">
+            <input type="number" step={0.5} value={trigger.position.x.toFixed(2)}
+              onChange={e => updatePos("x", Number(e.target.value))} className={inputCls} />
+          </Field>
+          <Field label="Y">
+            <input type="number" step={0.1} value={trigger.position.y.toFixed(2)}
+              onChange={e => updatePos("y", Number(e.target.value))} className={inputCls} />
+          </Field>
+          <Field label="Z">
+            <input type="number" step={0.5} value={trigger.position.z.toFixed(2)}
+              onChange={e => updatePos("z", Number(e.target.value))} className={inputCls} />
+          </Field>
+        </div>
+        <button
+          type="button"
+          onClick={() => setActiveTool(replaceTool)}
+          className="text-[10px] text-blue-400 hover:text-blue-300 transition-colors"
+        >
+          ↩ Reposicionar no canvas
+        </button>
+      </div>
+
       <Select label="Visibilidade" value={trigger.visibility}
         onChange={v => onUpdate({ visibility: v as AnyTriggerNode["visibility"] })}
         options={[{ value:"master_only",label:"Só mestre" },{ value:"always",label:"Sempre visível" },{ value:"on_trigger",label:"Ao ativar" }]} />

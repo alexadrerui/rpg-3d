@@ -19,14 +19,16 @@ const SECTIONS: { key: Section; label: string; icon: string }[] = [
 ]
 
 const PRESETS: { key: EnvPreset; label: string; icon: string; desc: string; group: string }[] = [
-  { key: "dungeon",   label: "Masmorra",      icon: "🏚", desc: "Escuro, névoa por raio",     group: "Fantasia"  },
-  { key: "forest",    label: "Floresta",      icon: "🌲", desc: "Verde, linha de visão",       group: "Fantasia"  },
-  { key: "tavern",    label: "Taverna",       icon: "🍺", desc: "Quente, sem névoa",           group: "Fantasia"  },
-  { key: "daylit",    label: "Dia aberto",    icon: "☀",  desc: "Luz solar intensa",           group: "Fantasia"  },
-  { key: "void",      label: "Vazio",         icon: "◾",  desc: "Escuridão total",             group: "Fantasia"  },
-  { key: "abandoned", label: "Abandonado",    icon: "🏭", desc: "Frio, névoa teal por sala",   group: "Horror"    },
-  { key: "horror",    label: "Horror",        icon: "🩸", desc: "Vermelho, linha de visão",    group: "Horror"    },
-  { key: "crypt",     label: "Cripta",        icon: "💀", desc: "Violeta, salas reveladas",    group: "Horror"    },
+  { key: "dungeon",   label: "Masmorra",      icon: "🏚", desc: "Escuro, névoa por raio",      group: "Fantasia"  },
+  { key: "forest",    label: "Floresta",      icon: "🌲", desc: "Verde, linha de visão",        group: "Fantasia"  },
+  { key: "tavern",    label: "Taverna",       icon: "🍺", desc: "Quente, sem névoa",            group: "Fantasia"  },
+  { key: "daylit",    label: "Dia aberto",    icon: "☀",  desc: "Luz solar intensa",            group: "Fantasia"  },
+  { key: "void",      label: "Vazio",         icon: "◾",  desc: "Escuridão total",              group: "Fantasia"  },
+  { key: "outdoor",   label: "Exterior",      icon: "⛅", desc: "Céu físico, 14h ensolarado",   group: "Exterior"  },
+  { key: "sunset",    label: "Pôr do sol",    icon: "🌅", desc: "Céu físico, luz rasante",      group: "Exterior"  },
+  { key: "abandoned", label: "Abandonado",    icon: "🏭", desc: "Frio, névoa teal por sala",    group: "Horror"    },
+  { key: "horror",    label: "Horror",        icon: "🩸", desc: "Vermelho, linha de visão",     group: "Horror"    },
+  { key: "crypt",     label: "Cripta",        icon: "💀", desc: "Violeta, salas reveladas",     group: "Horror"    },
 ]
 
 export function EnvironmentSidebarTab() {
@@ -61,7 +63,7 @@ export function EnvironmentSidebarTab() {
         {/* Presets dropdown */}
         {showPresets && (
           <div className="space-y-2">
-            {(["Fantasia", "Horror"] as const).map(group => (
+            {(["Fantasia", "Exterior", "Horror"] as const).map(group => (
               <div key={group}>
                 <p className="text-[9px] font-semibold uppercase tracking-widest text-neutral-600 px-1 mb-1">{group}</p>
                 <div className="grid grid-cols-1 gap-0.5">
@@ -264,40 +266,121 @@ function LightingSection({ env }: { env: EnvironmentConfig }) {
 // ATMOSFERA
 // ─────────────────────────────────────────────────────────────────────────────
 
+function formatHour(h: number) {
+  const hrs  = Math.floor(h)
+  const mins = Math.round((h - hrs) * 60)
+  return `${String(hrs).padStart(2, "0")}:${String(mins).padStart(2, "0")}`
+}
+
+function describeHour(h: number) {
+  if (h < 5  || h >= 21) return "Noite"
+  if (h < 7)             return "Amanhecer"
+  if (h < 9)             return "Manhã cedo"
+  if (h < 11)            return "Manhã"
+  if (h < 13)            return "Meio-dia"
+  if (h < 16)            return "Tarde"
+  if (h < 18)            return "Final de tarde"
+  if (h < 20)            return "Entardecer"
+  return                        "Anoitecer"
+}
+
 function AtmosphereSection({ env }: { env: EnvironmentConfig }) {
   const { setAtmosphere } = useEnvironmentStore()
-  const { skybox, fog, ambientSound } = env.atmosphere
+  const { skybox, fog, physicalSky } = env.atmosphere
+
+  const psky = physicalSky ?? { enabled: false, timeOfDay: 10 }
 
   return (
     <div className="p-4 space-y-5">
       <SectionHeader icon="🌌" label="Atmosfera" />
 
-      {/* Skybox */}
-      <Subsection label="Fundo da cena (skybox)">
-        <Field label="Tipo">
-          <Select
-            value={skybox.kind}
-            onChange={v => {
-              if (v === "color") setAtmosphere({ skybox: { kind: "color", color: "#1a1a2e" } })
-              else if (v === "none") setAtmosphere({ skybox: { kind: "none" } })
-            }}
-            options={[
-              { value: "color", label: "Cor sólida" },
-              { value: "none",  label: "Transparente" },
-            ]}
-          />
-        </Field>
-        {skybox.kind === "color" && (
-          <Field label="Cor do fundo">
-            <ColorInput
-              value={skybox.color}
-              onChange={v => setAtmosphere({ skybox: { kind: "color", color: v } })}
-            />
+      {/* Céu físico */}
+      <Subsection label="Céu físico (Preetham)">
+        <Toggle
+          label="Ativar céu físico"
+          desc="Substitui o fundo de cor — luz solar e hora do dia calculadas fisicamente"
+          checked={psky.enabled}
+          onChange={v => setAtmosphere({ physicalSky: { ...psky, enabled: v } })}
+        />
+        {psky.enabled && (<>
+          <Field label="Hora do dia">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <input
+                  type="range"
+                  min={0} max={24} step={0.25}
+                  value={psky.timeOfDay}
+                  onChange={e => setAtmosphere({ physicalSky: { ...psky, timeOfDay: Number(e.target.value) } })}
+                  className="flex-1 accent-amber-500"
+                />
+                <span className="text-xs text-amber-300 w-12 text-right font-mono">
+                  {formatHour(psky.timeOfDay)}
+                </span>
+              </div>
+              <p className="text-[10px] text-neutral-500">{describeHour(psky.timeOfDay)}</p>
+            </div>
           </Field>
-        )}
+
+          <div className="pt-1 border-t border-neutral-800/60">
+            <Toggle
+              label="Nuvens volumétricas"
+              desc="Camadas de nuvens animadas respondendo à iluminação solar"
+              checked={psky.clouds?.enabled ?? false}
+              onChange={v => setAtmosphere({ physicalSky: { ...psky, clouds: { ...(psky.clouds ?? { coverage: 0.35 }), enabled: v } } })}
+            />
+            {psky.clouds?.enabled && (
+              <Field label="Cobertura">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="range"
+                    min={0} max={1} step={0.05}
+                    value={psky.clouds.coverage}
+                    onChange={e => setAtmosphere({ physicalSky: { ...psky, clouds: { ...psky.clouds!, coverage: Number(e.target.value) } } })}
+                    className="flex-1 accent-sky-400"
+                  />
+                  <span className="text-xs text-sky-300 w-10 text-right">
+                    {Math.round(psky.clouds.coverage * 100)}%
+                  </span>
+                </div>
+                <p className="text-[10px] text-neutral-600 mt-1">
+                  {psky.clouds.coverage < 0.2 ? "Céu limpo" :
+                   psky.clouds.coverage < 0.5 ? "Parcialmente nublado" :
+                   psky.clouds.coverage < 0.8 ? "Muito nublado" : "Nublado"}
+                </p>
+              </Field>
+            )}
+          </div>
+        </>)}
       </Subsection>
 
-      {/* Volumetric fog */}
+      {/* Skybox — oculto quando céu físico está ativo */}
+      {!psky.enabled && (
+        <Subsection label="Fundo da cena (skybox)">
+          <Field label="Tipo">
+            <Select
+              value={skybox.kind}
+              onChange={v => {
+                if (v === "color") setAtmosphere({ skybox: { kind: "color", color: "#1a1a2e" } })
+                else if (v === "none") setAtmosphere({ skybox: { kind: "none" } })
+              }}
+              options={[
+                { value: "color", label: "Cor sólida" },
+                { value: "none",  label: "Transparente" },
+              ]}
+            />
+          </Field>
+          {skybox.kind === "color" && (
+            <Field label="Cor do fundo">
+              <ColorInput
+                value={skybox.color}
+                onChange={v => setAtmosphere({ skybox: { kind: "color", color: v } })}
+              />
+            </Field>
+          )}
+        </Subsection>
+      )}
+
+      {/* Névoa volumétrica */}
       <Subsection label="Névoa volumétrica">
         <Toggle
           label="Ativar névoa"

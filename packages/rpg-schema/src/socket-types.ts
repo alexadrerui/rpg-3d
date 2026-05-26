@@ -19,6 +19,16 @@ import type {
   EvDisarmTrap,
   EvClearFog,
   EvParticipant,
+  EvMediaPlay,
+  EvMediaPause,
+  EvMediaNext,
+  EvMediaPrev,
+  EvMediaStop,
+  EvMediaState,
+  EvVideoPlay,
+  EvVideoPause,
+  EvVideoStop,
+  EvVideoState,
 } from "./events.js"
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -36,6 +46,8 @@ export interface ServerToClientMap {
   "dice:result":       (data: EvDiceResult)        => void
   "trigger:activated": (data: EvTriggerActivated)  => void
   "fog:revealed":      (data: EvFogRevealed)       => void
+  "media:state":       (data: EvMediaState)        => void
+  "video:state":       (data: EvVideoState)        => void
   "error":             (data: { code: string; message: string }) => void
   "ping":              () => void
 }
@@ -51,6 +63,14 @@ export interface ClientToServerMap {
   "note:reveal":  (data: EvRevealNote, cb: AckFn) => void
   "trap:disarm":  (data: EvDisarmTrap, cb: AckFn) => void
   "fog:clear":    (data: EvClearFog,   cb: AckFn) => void
+  "media:play":   (data: EvMediaPlay,  cb: AckFn) => void
+  "media:pause":  (data: EvMediaPause, cb: AckFn) => void
+  "media:next":   (data: EvMediaNext,  cb: AckFn) => void
+  "media:prev":   (data: EvMediaPrev,  cb: AckFn) => void
+  "media:stop":   (data: EvMediaStop,  cb: AckFn) => void
+  "video:play":   (data: EvVideoPlay,  cb: AckFn) => void
+  "video:pause":  (data: EvVideoPause, cb: AckFn) => void
+  "video:stop":   (data: EvVideoStop,  cb: AckFn) => void
   "pong":         () => void
 }
 

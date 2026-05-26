@@ -151,8 +151,11 @@ export const campaigns = {
   create: (data: { name: string; description?: string; systemId?: string }) =>
     apiFetch<ApiCampaign>("/campaigns", { method: "POST", body: JSON.stringify(data) }),
 
-  createInvite: (campaignId: string) =>
-    apiFetch<ApiInvite>(`/campaigns/${campaignId}/invite`, { method: "POST" }),
+  createInvite: (campaignId: string, opts?: { email?: string; recipientName?: string }) =>
+    apiFetch<ApiInvite & { emailSent?: boolean }>(`/campaigns/${campaignId}/invite`, {
+      method: "POST",
+      body:   JSON.stringify(opts ?? {}),
+    }),
 
   getSessionToken: (campaignId: string) =>
     apiFetch<ApiSessionData>(`/campaigns/${campaignId}/session`, { method: "POST" }),

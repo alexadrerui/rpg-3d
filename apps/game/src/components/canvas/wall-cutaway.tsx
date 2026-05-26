@@ -34,10 +34,11 @@ type Props = {
 export function WallCutaway({ tokens }: Props) {
   const { camera } = useThree()
 
-  // Vetores pré-alocados — evita GC pressure a 60fps
-  const _camFwd  = useRef(new THREE.Vector3())
-  const _wallPos = useRef(new THREE.Vector3())
-  const _tmp     = useRef(new THREE.Vector3())
+  // Vetores e wrapper pré-alocados — evita GC pressure a 60fps
+  const _camFwd   = useRef(new THREE.Vector3())
+  const _wallPos  = useRef(new THREE.Vector3())
+  const _tmp      = useRef(new THREE.Vector3())
+  const _singleMat = useRef<THREE.Material[]>([null as any]) // wrapper reutilizável
 
   // Paredes cujo opacity estamos gerenciando (para restaurar ao sair do raio)
   const ourWalls = useRef(new Set<string>())
@@ -86,7 +87,13 @@ export function WallCutaway({ tokens }: Props) {
         if (!(child instanceof THREE.Mesh)) return
         if (child.name === "collision-mesh") return
 
-        const mats = Array.isArray(child.material) ? child.material : [child.material]
+        let mats: THREE.Material[]
+        if (Array.isArray(child.material)) {
+          mats = child.material
+        } else {
+          _singleMat.current[0] = child.material  // reutiliza array, evita alloc
+          mats = _singleMat.current
+        }
         for (const mat of mats) {
           if (!mat || !("opacity" in mat)) continue
           const m = mat as THREE.MeshStandardMaterial

@@ -3,6 +3,7 @@ import { z }             from "zod"
 import { prisma }        from "../lib/prisma.js"
 import { signToken }     from "../lib/jwt.js"
 import { requireAuth }   from "../middleware/auth.js"
+import { sendInviteEmail } from "../lib/mailer.js"
 
 export const campaignRouter: ReturnType<typeof Router> = Router()
 campaignRouter.use(requireAuth)
@@ -74,22 +75,47 @@ campaignRouter.get("/:id", async (req, res) => {
   res.json({ ...campaign, isMaster: campaign.masterId === userId })
 })
 
+const InviteSchema = z.object({
+  email:         z.string().email().optional(),
+  recipientName: z.string().max(80).optional(),
+})
+
 // ── POST /campaigns/:id/invite ────────────────────────────────────────────────
 campaignRouter.post("/:id/invite", async (req, res) => {
-  const campaign = await prisma.campaign.findUnique({ where: { id: req.params.id } })
+  const campaign = await prisma.campaign.findUnique({
+    where:   { id: req.params.id },
+    include: { master: { select: { name: true } } },
+  })
   if (!campaign) { res.status(404).json({ error: "NOT_FOUND" }); return }
   if (campaign.masterId !== req.user!.sub) { res.status(403).json({ error: "FORBIDDEN" }); return }
+
+  const body = InviteSchema.safeParse(req.body)
+  const email         = body.success ? body.data.email : undefined
+  const recipientName = body.success ? (body.data.recipientName ?? "") : ""
 
   const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7) // 7 dias
   const invite    = await prisma.campaignInvite.create({
     data: { campaignId: campaign.id, expiresAt },
   })
 
-  const baseUrl = process.env.DASHBOARD_URL ?? "http://localhost:3003"
+  const baseUrl    = process.env.DASHBOARD_URL ?? "http://localhost:3003"
+  const inviteUrl  = `${baseUrl}/invite/${invite.token}`
+
+  if (email) {
+    sendInviteEmail({
+      toEmail:       email,
+      recipientName,
+      campaignName:  campaign.name,
+      masterName:    campaign.master.name ?? "Mestre",
+      inviteUrl,
+    }).catch(err => console.error("[invite] email error:", err))
+  }
+
   res.status(201).json({
     token:     invite.token,
     expiresAt: invite.expiresAt,
-    url:       `${baseUrl}/invite/${invite.token}`,
+    url:       inviteUrl,
+    emailSent: !!email,
   })
 })
 

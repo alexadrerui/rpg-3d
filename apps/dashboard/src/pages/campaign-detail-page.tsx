@@ -9,6 +9,7 @@ import {
   type ApiCampaign, type ApiScene, type ApiCharacter, type ApiUser,
   type ApiSession, type ApiSessionLog,
 } from "../lib/api-client"
+import { exportSessionPdf } from "../lib/export-session-pdf"
 import { useAuthStore } from "../store/auth-store"
 import { clsx } from "clsx"
 
@@ -28,8 +29,12 @@ export function CampaignDetailPage() {
   const [campaign, setCampaign] = useState<CampaignDetail | null>(null)
   const [loading, setLoading]   = useState(true)
   const [error, setError]       = useState<string | null>(null)
-  const [inviteUrl, setInviteUrl] = useState<string | null>(null)
-  const [copying, setCopying]   = useState(false)
+  const [inviteUrl, setInviteUrl]     = useState<string | null>(null)
+  const [inviteEmailSent, setEmailSent] = useState(false)
+  const [showInviteForm, setShowInvite] = useState(false)
+  const [inviteEmail, setInviteEmail]   = useState("")
+  const [inviteName, setInviteName]     = useState("")
+  const [copying, setCopying]           = useState(false)
   const [starting, setStarting] = useState(false)
   const [pastSessions, setPastSessions]   = useState<ApiSession[]>([])
   const [expandedSession, setExpanded]    = useState<string | null>(null)
@@ -81,9 +86,14 @@ export function CampaignDetailPage() {
     if (!id) return
     setCopying(true)
     try {
-      const { url } = await campaignsApi.createInvite(id)
+      const opts = inviteEmail ? { email: inviteEmail, recipientName: inviteName } : undefined
+      const { url, emailSent } = await campaignsApi.createInvite(id, opts)
       await navigator.clipboard.writeText(url)
       setInviteUrl(url)
+      setEmailSent(!!emailSent)
+      setShowInvite(false)
+      setInviteEmail("")
+      setInviteName("")
     } finally { setCopying(false) }
   }
 
@@ -163,10 +173,54 @@ export function CampaignDetailPage() {
 
         <div className="flex items-center gap-2">
           {isMaster && (
-            <button onClick={handleCopyInvite} disabled={copying}
-              className="text-xs text-neutral-400 hover:text-neutral-200 border border-neutral-700/50 hover:border-neutral-600 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50">
-              {copying ? "..." : "Convidar jogador"}
-            </button>
+            <div className="relative">
+              <button onClick={() => setShowInvite(v => !v)} disabled={copying}
+                className="text-xs text-neutral-400 hover:text-neutral-200 border border-neutral-700/50 hover:border-neutral-600 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50">
+                {copying ? "..." : "Convidar jogador"}
+              </button>
+
+              {showInviteForm && (
+                <div className="absolute right-0 top-full mt-2 z-20 w-72 bg-neutral-900 border border-neutral-700/60 rounded-xl shadow-2xl p-4 space-y-3">
+                  <p className="text-xs font-medium text-neutral-300">Gerar link de convite</p>
+                  <div className="space-y-2">
+                    <input
+                      type="text"
+                      placeholder="Nome do jogador (opcional)"
+                      value={inviteName}
+                      onChange={e => setInviteName(e.target.value)}
+                      className="w-full text-xs bg-neutral-800 border border-neutral-700/50 rounded-lg px-3 py-2 text-neutral-200 placeholder-neutral-600 outline-none focus:border-neutral-500"
+                    />
+                    <input
+                      type="email"
+                      placeholder="E-mail para notificação (opcional)"
+                      value={inviteEmail}
+                      onChange={e => setInviteEmail(e.target.value)}
+                      className="w-full text-xs bg-neutral-800 border border-neutral-700/50 rounded-lg px-3 py-2 text-neutral-200 placeholder-neutral-600 outline-none focus:border-neutral-500"
+                    />
+                    {inviteEmail && (
+                      <p className="text-[10px] text-neutral-500">
+                        Um e-mail com o link será enviado automaticamente.
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleCopyInvite}
+                      disabled={copying}
+                      className="flex-1 text-xs bg-violet-700 hover:bg-violet-600 text-white py-2 rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      {copying ? "Gerando..." : "Gerar e copiar link"}
+                    </button>
+                    <button
+                      onClick={() => setShowInvite(false)}
+                      className="text-xs text-neutral-600 hover:text-neutral-400 px-3 py-2"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           )}
           <button onClick={handleStartSession} disabled={starting}
             className="text-xs bg-purple-700 hover:bg-purple-600 text-white px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 font-medium">
@@ -179,6 +233,10 @@ export function CampaignDetailPage() {
         <div className="bg-green-950/30 border-b border-green-800/20 px-6 py-2 flex items-center gap-2">
           <span className="text-xs text-green-500">Link copiado:</span>
           <span className="text-xs text-green-400 font-mono truncate max-w-sm">{inviteUrl}</span>
+          {inviteEmailSent && (
+            <span className="text-xs text-violet-400 ml-2">✉ e-mail enviado</span>
+          )}
+          <button onClick={() => setInviteUrl(null)} className="ml-auto text-neutral-700 hover:text-neutral-400 text-xs">✕</button>
         </div>
       )}
 
@@ -256,6 +314,7 @@ export function CampaignDetailPage() {
                 <SessionRow
                   key={s.id}
                   session={s}
+                  campaignName={campaign.name}
                   expanded={expandedSession === s.id}
                   logs={sessionLogs[s.id] ?? null}
                   loadingLog={loadingLog === s.id}
@@ -353,14 +412,22 @@ function formatLogDesc(log: ApiSessionLog): string {
   }
 }
 
-function SessionRow({ session: s, expanded, logs, loadingLog, onToggle }: {
-  session: ApiSession; expanded: boolean
+function SessionRow({ session: s, campaignName, expanded, logs, loadingLog, onToggle }: {
+  session: ApiSession; campaignName: string; expanded: boolean
   logs: ApiSessionLog[] | null; loadingLog: boolean
   onToggle: () => void
 }) {
+  const [exporting, setExporting] = useState(false)
   const logCount = s._count?.logs ?? (logs?.length ?? 0)
   const date = new Date(s.startedAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" })
   const time = new Date(s.startedAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+
+  const handleExport = async () => {
+    if (!logs || logs.length === 0) return
+    setExporting(true)
+    try { exportSessionPdf(campaignName, s, logs) }
+    finally { setExporting(false) }
+  }
 
   return (
     <div className="bg-neutral-900 border border-neutral-800 rounded-xl overflow-hidden">
@@ -385,31 +452,44 @@ function SessionRow({ session: s, expanded, logs, loadingLog, onToggle }: {
       </button>
 
       {expanded && (
-        <div className="border-t border-neutral-800 px-4 py-3 max-h-80 overflow-y-auto">
-          {loadingLog ? (
-            <p className="text-xs text-neutral-600 py-2">Carregando log...</p>
-          ) : !logs || logs.length === 0 ? (
-            <p className="text-xs text-neutral-600 py-2">Nenhum evento registrado.</p>
-          ) : (
-            <div className="space-y-1">
-              {logs.map(log => {
-                const meta = LOG_TYPE_META[log.type] ?? { label: log.type, cls: "bg-neutral-800 text-neutral-500" }
-                const t = new Date(log.timestamp).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
-                return (
-                  <div key={log.id} className="flex items-start gap-2 text-xs">
-                    <span className="text-neutral-600 shrink-0 w-10">{t}</span>
-                    <span className={`shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium ${meta.cls}`}>
-                      {meta.label}
-                    </span>
-                    {log.actorName && (
-                      <span className="text-neutral-400 shrink-0 font-medium">{log.actorName}</span>
-                    )}
-                    <span className="text-neutral-500 truncate">{formatLogDesc(log)}</span>
-                  </div>
-                )
-              })}
+        <div className="border-t border-neutral-800">
+          {logs && logs.length > 0 && (
+            <div className="flex justify-end px-4 pt-3 pb-1">
+              <button
+                onClick={handleExport}
+                disabled={exporting}
+                className="text-xs text-neutral-400 hover:text-neutral-200 border border-neutral-700/50 hover:border-neutral-600 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+              >
+                {exporting ? "Gerando..." : "⬇ Exportar PDF"}
+              </button>
             </div>
           )}
+          <div className="px-4 pb-3 max-h-80 overflow-y-auto">
+            {loadingLog ? (
+              <p className="text-xs text-neutral-600 py-2">Carregando log...</p>
+            ) : !logs || logs.length === 0 ? (
+              <p className="text-xs text-neutral-600 py-2">Nenhum evento registrado.</p>
+            ) : (
+              <div className="space-y-1">
+                {logs.map(log => {
+                  const meta = LOG_TYPE_META[log.type] ?? { label: log.type, cls: "bg-neutral-800 text-neutral-500" }
+                  const t = new Date(log.timestamp).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+                  return (
+                    <div key={log.id} className="flex items-start gap-2 text-xs">
+                      <span className="text-neutral-600 shrink-0 w-10">{t}</span>
+                      <span className={`shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium ${meta.cls}`}>
+                        {meta.label}
+                      </span>
+                      {log.actorName && (
+                        <span className="text-neutral-400 shrink-0 font-medium">{log.actorName}</span>
+                      )}
+                      <span className="text-neutral-500 truncate">{formatLogDesc(log)}</span>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

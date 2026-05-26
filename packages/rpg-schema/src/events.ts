@@ -172,6 +172,93 @@ export const EvNpcDespawned = z.object({
   tokenId: z.string().uuid(),
 })
 
+// ── MÍDIA (playlist de áudio) ────────────────────────────────────────────────
+
+/** C→S (mestre): inicia ou retoma reprodução; trackIndex pula para faixa específica */
+export const EvMediaPlay = z.object({
+  trackIndex: z.number().int().min(0).optional(),
+})
+
+/** C→S (mestre): pausa reprodução */
+export const EvMediaPause = z.object({})
+
+/** C→S (mestre): avança para próxima faixa */
+export const EvMediaNext = z.object({})
+
+/** C→S (mestre): volta para faixa anterior */
+export const EvMediaPrev = z.object({})
+
+/** C→S (mestre): para reprodução e reseta */
+export const EvMediaStop = z.object({})
+
+/** S→C: estado atual da playlist — enviado em broadcast e ao entrar na sala */
+export const EvMediaState = z.object({
+  playing:    z.boolean(),
+  trackIndex: z.number().int(),
+  trackUrl:   z.string().nullable(),
+  trackName:  z.string().nullable(),
+})
+
+// ── VÍDEO ─────────────────────────────────────────────────────────────────────
+
+/** Efeitos de transição cinematográfica disponíveis */
+export const VideoTransitionEffect = z.enum([
+  "none",
+  "fade",
+  "dissolve",   // noise dissolve com faíscas
+  "melt",       // liquify — colunas derretendo
+  "ripple",     // ondas radiais de água
+  "wipe_right", // varredura esquerda→direita com brilho
+  "wipe_down",  // varredura cima→baixo com brilho
+  "zoom_in",    // zoom do centro para fora
+  "burn",       // queima diagonal com fogo
+  "dream",      // aberração cromática + ondas
+])
+export type VideoTransitionEffect = z.infer<typeof VideoTransitionEffect>
+
+/** Modo de exibição do vídeo */
+export const VideoMode = z.enum([
+  "panel",      // painel flutuante arrastável (existente)
+  "cinematic",  // tela cheia com transição shader
+  "overlay",    // sobreposição semi-transparente sobre o jogo
+])
+export type VideoMode = z.infer<typeof VideoMode>
+
+/** Blend modes para overlay */
+export const OverlayBlend = z.enum(["normal", "multiply", "screen", "overlay", "lighten"])
+export type OverlayBlend = z.infer<typeof OverlayBlend>
+
+/** C→S (mestre): inicia reprodução de vídeo */
+export const EvVideoPlay = z.object({
+  url:                z.string().url(),
+  name:               z.string().optional(),
+  mode:               VideoMode.optional().default("panel"),
+  transitionIn:       VideoTransitionEffect.optional().default("fade"),
+  transitionOut:      VideoTransitionEffect.optional().default("fade"),
+  transitionDuration: z.number().int().min(0).max(5000).optional().default(1500),
+  overlayOpacity:     z.number().min(0).max(1).optional().default(1.0),
+  overlayBlend:       OverlayBlend.optional().default("normal"),
+})
+
+/** C→S (mestre): pausa vídeo */
+export const EvVideoPause = z.object({})
+
+/** C→S (mestre): encerra e fecha o vídeo */
+export const EvVideoStop = z.object({})
+
+/** S→C: estado do vídeo — enviado em broadcast e ao entrar na sala */
+export const EvVideoState = z.object({
+  playing:            z.boolean(),
+  url:                z.string().nullable(),
+  name:               z.string().nullable(),
+  mode:               VideoMode.nullable(),
+  transitionIn:       VideoTransitionEffect.nullable(),
+  transitionOut:      VideoTransitionEffect.nullable(),
+  transitionDuration: z.number().nullable(),
+  overlayOpacity:     z.number().nullable(),
+  overlayBlend:       OverlayBlend.nullable(),
+})
+
 // ── FOG OF WAR ───────────────────────────────────────────────────────────────
 
 /** S→C: células de fog reveladas (delta, não o mapa inteiro) */
@@ -198,6 +285,8 @@ export const ServerToClientEvents = {
   "dice:result":         EvDiceResult,
   "trigger:activated":   EvTriggerActivated,
   "fog:revealed":        EvFogRevealed,
+  "media:state":         EvMediaState,
+  "video:state":         EvVideoState,
 } as const
 
 export const ClientToServerEvents = {
@@ -211,8 +300,29 @@ export const ClientToServerEvents = {
   "note:reveal":     EvRevealNote,
   "trap:disarm":     EvDisarmTrap,
   "fog:clear":       EvClearFog,
+  "media:play":      EvMediaPlay,
+  "media:pause":     EvMediaPause,
+  "media:next":      EvMediaNext,
+  "media:prev":      EvMediaPrev,
+  "media:stop":      EvMediaStop,
+  "video:play":      EvVideoPlay,
+  "video:pause":     EvVideoPause,
+  "video:stop":      EvVideoStop,
 } as const
 
+export type EvMediaPlay         = z.infer<typeof EvMediaPlay>
+export type EvMediaPause        = z.infer<typeof EvMediaPause>
+export type EvMediaNext         = z.infer<typeof EvMediaNext>
+export type EvMediaPrev         = z.infer<typeof EvMediaPrev>
+export type EvMediaStop         = z.infer<typeof EvMediaStop>
+export type EvMediaState        = z.infer<typeof EvMediaState>
+export type EvVideoPlay         = z.infer<typeof EvVideoPlay>
+export type EvVideoPause        = z.infer<typeof EvVideoPause>
+export type EvVideoStop         = z.infer<typeof EvVideoStop>
+export type EvVideoState        = z.infer<typeof EvVideoState>
+export type VideoTransitionEffect = z.infer<typeof VideoTransitionEffect>
+export type VideoMode           = z.infer<typeof VideoMode>
+export type OverlayBlend        = z.infer<typeof OverlayBlend>
 export type EvJoinRoom          = z.infer<typeof EvJoinRoom>
 export type EvRoomJoined        = z.infer<typeof EvRoomJoined>
 export type EvLoadScene         = z.infer<typeof EvLoadScene>

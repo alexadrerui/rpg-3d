@@ -460,7 +460,21 @@ aceita tokens dev sem validação quando `NODE_ENV !== "production"`.
 
 ## Testes
 
-Não há suite de testes automatizados implementada ainda.
+O `api-server` tem suite de integração completa em `server/api-server/src/test/`:
+- `auth.test.ts` — 15 testes (register, login, /me, refresh, logout)
+- `systems.test.ts` — 8 testes (listagem, purchase, créditos)
+- `internal.test.ts` — 11 testes (session-log, session-end, GET /sessions/:id/log)
+
+```bash
+# SEMPRE usar bun run test — não usar bun test (roda o runner nativo do Bun,
+# que ignora vitest globalSetup/setupFiles e causa falhas espúrias)
+cd server/api-server && bun run test
+```
+
+Requer PostgreSQL rodando localmente. O `global-setup.ts` cria o banco `rpg3d_test`
+via Docker (`rpg3d-postgres`) e roda `prisma db push`. O `setup.ts` limpa todas as
+tabelas em ordem de FK antes de cada teste.
+
 O Pascal tem alguns `.test.ts` nos seus packages (`pascal-core`, `pascal-editor`) que
 foram herdados — não os quebrar.
 

@@ -5,7 +5,7 @@ import { useAssetStore }      from "../../store/asset-store"
 import { uploadAsset }        from "../../lib/upload-asset"
 import type { AssetRef }      from "@rpg3d/schema"
 
-type AssetKind = "model" | "texture" | "audio"
+type AssetKind = "model" | "texture" | "audio" | "video"
 
 interface UploadEntry {
   name:     string
@@ -18,18 +18,21 @@ const ACCEPT: Record<AssetKind, string> = {
   model:   ".glb,.gltf",
   texture: ".png,.jpg,.jpeg,.webp,.ktx2",
   audio:   ".mp3,.ogg,.wav",
+  video:   ".mp4,.webm,.avi,.mov,.mkv",
 }
 
 const KIND_LABEL: Record<AssetKind, string> = {
   model:   "Modelo 3D (.glb)",
   texture: "Textura (.png/.jpg)",
   audio:   "Áudio (.mp3/.ogg)",
+  video:   "Vídeo (.mp4/.webm)",
 }
 
 const KIND_TAG: Record<AssetKind, string> = {
   model:   "3D",
   texture: "TEX",
   audio:   "SOM",
+  video:   "VID",
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -37,7 +40,7 @@ const KIND_TAG: Record<AssetKind, string> = {
 export function AssetSidebarTab() {
   const { token, apiUrl, campaignId, sceneName, setToken, setApiUrl, setCampaignId, setSceneName, clear } =
     useEditorAuthStore()
-  const { models, textures, audio, addModel, addTexture, addAudio, removeAsset } = useAssetStore()
+  const { models, textures, audio, videos, addModel, addTexture, addAudio, addVideo, removeAsset } = useAssetStore()
   const [uploads, setUploads] = useState<Record<string, UploadEntry>>({})
 
   // ── sem token: painel de conexão ─────────────────────────────────────────
@@ -66,6 +69,7 @@ export function AssetSidebarTab() {
         if (kind === "model")   addModel(asset)
         if (kind === "texture") addTexture(asset)
         if (kind === "audio")   addAudio(asset)
+        if (kind === "video")   addVideo(asset)
 
         setUploads((u) => ({ ...u, [key]: { ...u[key]!, status: "done", progress: 100 } }))
         setTimeout(() => setUploads((u) => { const { [key]: _, ...rest } = u; return rest }), 3000)
@@ -76,7 +80,7 @@ export function AssetSidebarTab() {
         }))
       }
     },
-    [token, apiUrl, campaignId, addModel, addTexture, addAudio],
+    [token, apiUrl, campaignId, addModel, addTexture, addAudio, addVideo],
   )
 
   // ── lista de todos os assets desta sessão ─────────────────────────────────
@@ -85,6 +89,7 @@ export function AssetSidebarTab() {
     ...models.map((a): [AssetRef, AssetKind]   => [a, "model"]),
     ...textures.map((a): [AssetRef, AssetKind] => [a, "texture"]),
     ...audio.map((a): [AssetRef, AssetKind]    => [a, "audio"]),
+    ...videos.map((a): [AssetRef, AssetKind]   => [a, "video"]),
   ]
 
   return (
@@ -122,7 +127,7 @@ export function AssetSidebarTab() {
       <section>
         <p className="text-[11px] text-neutral-500 uppercase tracking-wide mb-2">Adicionar asset</p>
         <div className="flex flex-col gap-1.5">
-          {(["model", "texture", "audio"] as AssetKind[]).map((kind) => (
+          {(["model", "texture", "audio", "video"] as AssetKind[]).map((kind) => (
             <UploadZone
               key={kind}
               kind={kind}

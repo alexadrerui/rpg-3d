@@ -11,7 +11,9 @@ import { EnvironmentSidebarTab } from "./environment/environment-sidebar-tab"
 import { downloadScene }   from "../lib/export-scene"
 import { uploadSceneFile }  from "../lib/upload-asset"
 import { AssetSidebarTab }  from "./assets/asset-sidebar-tab"
+import { MediaSidebarTab }  from "./media/media-sidebar-tab"
 import { useAssetStore }     from "../store/asset-store"
+import { useMediaStore }     from "../store/media-store"
 import { useEditorAuthStore } from "../store/auth-store"
 import type { RpgSceneFile } from "@rpg3d/schema"
 
@@ -80,8 +82,9 @@ export function EditorRoot() {
       rootNodeIds: sceneState.rootNodeIds,
     }
 
-    const { models, textures, audio } = useAssetStore.getState()
+    const { models, textures, audio, videos } = useAssetStore.getState()
     const { token, apiUrl, campaignId, sceneName } = useEditorAuthStore.getState()
+    const mediaConfig = useMediaStore.getState().getConfig()
 
     const scene: RpgSceneFile = {
       $schema: "rpg-scene/v1",
@@ -99,9 +102,10 @@ export function EditorRoot() {
         nodes:       graph.nodes,
         rootNodeIds: graph.rootNodeIds,
       },
-      assets:      { models, textures, audio },
+      assets:      { models, textures, audio, videos },
       triggers,
       environment: env,
+      media:       mediaConfig.playlist.length > 0 ? mediaConfig : undefined,
     }
 
     if (token && campaignId) {
@@ -161,6 +165,13 @@ export function EditorRoot() {
       id:        "assets",
       label:     "Assets",
       component: AssetSidebarTab,
+      mobileDefaultSnap: 0.5,
+      mobileIcon: null,
+    },
+    {
+      id:        "media",
+      label:     "Mídia",
+      component: MediaSidebarTab,
       mobileDefaultSnap: 0.5,
       mobileIcon: null,
     },

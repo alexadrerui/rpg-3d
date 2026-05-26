@@ -33,6 +33,25 @@ export type NpcTokenState = {
   avatarUrl?:  string
 }
 
+export type MediaState = {
+  playing:    boolean
+  trackIndex: number
+  trackUrl:   string | null
+  trackName:  string | null
+}
+
+export type VideoState = {
+  playing:            boolean
+  url:                string | null
+  name:               string | null
+  mode:               string | null
+  transitionIn:       string | null
+  transitionOut:      string | null
+  transitionDuration: number | null
+  overlayOpacity:     number | null
+  overlayBlend:       string | null
+}
+
 export type RoomState = {
   sessionId:      string
   campaignId:     string
@@ -45,6 +64,8 @@ export type RoomState = {
   disarmedTraps:  Set<string>
   revealedNotes:  Set<string>
   fogCells:       Set<string>                 // "x:z" serializado
+  media:          MediaState
+  video:          VideoState
   lastActivity:   number
 }
 
@@ -86,6 +107,8 @@ export class SessionManager {
       disarmedTraps:  new Set(),
       revealedNotes:  new Set(),
       fogCells:       new Set(),
+      media:  { playing: false, trackIndex: 0, trackUrl: null, trackName: null },
+      video:  { playing: false, url: null, name: null, mode: null, transitionIn: null, transitionOut: null, transitionDuration: null, overlayOpacity: null, overlayBlend: null },
       lastActivity:   Date.now(),
     }
     this.rooms.set(sessionId, room)
@@ -203,6 +226,18 @@ export class SessionManager {
     return Array.from(room.npcTokens.values())
   }
 
+  // ── Mídia ─────────────────────────────────────────────────────────────────
+
+  setMedia(room: RoomState, state: Partial<MediaState>): void {
+    Object.assign(room.media, state)
+    this.touch(room)
+  }
+
+  setVideo(room: RoomState, state: Partial<VideoState>): void {
+    Object.assign(room.video, state)
+    this.touch(room)
+  }
+
   // ── Fog of war ───────────────────────────────────────────────────────────
 
   revealFogCells(room: RoomState, cells: { x: number; z: number }[]): string[] {
@@ -254,6 +289,8 @@ export class SessionManager {
         fogCells:       Array.from(room.fogCells),
         npcTokens:      Array.from(room.npcTokens.values()),
         participants:   Array.from(room.participants.entries()).map(([, p]) => p),
+        media:          room.media,
+        video:          room.video,
         lastActivity:   room.lastActivity,
       }
       await this.redis.setex(
@@ -285,6 +322,8 @@ export class SessionManager {
         disarmedTraps:  new Set(d.disarmedTraps),
         revealedNotes:  new Set(d.revealedNotes),
         fogCells:       new Set(d.fogCells),
+        media:  d.media  ?? { playing: false, trackIndex: 0, trackUrl: null, trackName: null },
+        video:  d.video  ?? { playing: false, url: null, name: null, mode: null, transitionIn: null, transitionOut: null, transitionDuration: null, overlayOpacity: null, overlayBlend: null },
         lastActivity:   d.lastActivity,
       }
       console.log(`[session-manager] restored session ${sessionId} from Redis`)

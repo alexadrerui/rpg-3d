@@ -60,6 +60,17 @@ export const AtmosphereConfig = z.object({
     far:     z.number().positive().default(50),
   }).default({} as any),
 
+  // Céu físico (Preetham sky model via @react-three/drei <Sky>)
+  // Quando habilitado substitui o skybox de cor sólida e move a luz direcional
+  physicalSky: z.object({
+    enabled:   z.boolean().default(false),
+    timeOfDay: z.number().min(0).max(24).default(10), // hora local (0–24)
+    clouds: z.object({
+      enabled:  z.boolean().default(false),
+      coverage: z.number().min(0).max(1).default(0.35), // 0 = sem nuvens, 1 = cobertura total
+    }).default({ enabled: false, coverage: 0.35 }),
+  }).default({ enabled: false, timeOfDay: 10, clouds: { enabled: false, coverage: 0.35 } }),
+
   ambientSound: AssetRef.optional(),  // trilha ambiente da cena
 })
 

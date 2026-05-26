@@ -6,6 +6,7 @@ import type {
   EvNpcSpawned,
   EvMessageReceived, EvDiceResult, EvTriggerActivated,
   EvJoinRoom, EvLoadScene, EvSpawnNpc, EvDespawnNpc,
+  EvMediaState, EvVideoState, EvVideoPlay,
 } from "@rpg3d/schema"
 
 // ── Estado Zustand ────────────────────────────────────────────────────────────
@@ -16,12 +17,27 @@ export type ActiveScene    = { sceneId: string; sceneUrl: string; transitionFx: 
 export type FogCell        = { x: number; z: number }
 export type NpcToken       = EvNpcSpawned
 
+export type MediaState = { playing: boolean; trackIndex: number; trackUrl: string | null; trackName: string | null }
+export type VideoState = {
+  playing:            boolean
+  url:                string | null
+  name:               string | null
+  mode:               string | null
+  transitionIn:       string | null
+  transitionOut:      string | null
+  transitionDuration: number | null
+  overlayOpacity:     number | null
+  overlayBlend:       string | null
+}
+
 type RoomStore = {
   status: GameRoomStatus; sessionId: string | null
   participants: Participant[]
   tokens:    Record<string, TokenPosition>
   npcTokens: Record<string, NpcToken>
   activeScene: ActiveScene | null; fogCells: FogCell[]; lastError: string | null
+  mediaState: MediaState | null
+  videoState: VideoState | null
   _setStatus:      (s: GameRoomStatus) => void
   _setSession:     (d: EvRoomJoined) => void
   _setParticipant: (p: Participant) => void
@@ -33,11 +49,14 @@ type RoomStore = {
   _revealFog:      (c: FogCell[]) => void
   _clearFog:       () => void
   _setError:       (e: string | null) => void
+  _setMediaState:  (m: EvMediaState) => void
+  _setVideoState:  (v: EvVideoState) => void
 }
 
 export const useRoomStore = create<RoomStore>((set) => ({
   status: "disconnected", sessionId: null,
   participants: [], tokens: {}, npcTokens: {}, activeScene: null, fogCells: [], lastError: null,
+  mediaState: null, videoState: null,
 
   _setStatus:      (status)    => set({ status }),
   _setError:       (lastError) => set({ lastError }),
@@ -68,6 +87,8 @@ export const useRoomStore = create<RoomStore>((set) => ({
     return incoming.length ? { fogCells: [...s.fogCells, ...incoming] } : {}
   }),
   _clearFog: () => set({ fogCells: [] }),
+  _setMediaState: (m) => set({ mediaState: m }),
+  _setVideoState: (v) => set({ videoState: v }),
 }))
 
 // ── useGameRoom ───────────────────────────────────────────────────────────────
@@ -109,6 +130,8 @@ export function useGameRoom(opts: UseGameRoomOptions) {
       if (!cells.length) store._clearFog(); else store._revealFog(cells)
       cbRef.current.onFogRevealed?.(cells)
     })
+    socket.on("media:state",   (d) => store._setMediaState(d))
+    socket.on("video:state",   (d) => store._setVideoState(d))
     socket.on("error",         ({ message }) => { store._setError(message); store._setStatus("error") })
     socket.on("connect_error", (err)         => { store._setError(err.message); store._setStatus("error") })
     socket.on("ping", () => socket.emit("pong"))
@@ -125,8 +148,9 @@ export function useGameRoom(opts: UseGameRoomOptions) {
       socket.off("room:joined").off("room:participant").off("scene:loaded")
         .off("token:moved").off("npc:spawned").off("npc:despawned")
         .off("chat:message").off("dice:result")
-        .off("trigger:activated").off("fog:revealed").off("error")
-        .off("connect_error").off("ping")
+        .off("trigger:activated").off("fog:revealed")
+        .off("media:state").off("video:state")
+        .off("error").off("connect_error").off("ping")
     }
   }, [sessionId, campaignId, characterId, token, serverUrl, avatarType, avatarUrl])
 
@@ -160,10 +184,37 @@ export function useGameRoom(opts: UseGameRoomOptions) {
   const despawnNpc = useCallback((tokenId: string) =>
     new Promise<void>((res, rej) => getSocket(serverUrl).emit("npc:despawn", { tokenId }, r => r.ok ? res() : rej(new Error(r.error)))), [serverUrl])
 
+  const playMedia  = useCallback((trackIndex?: number) =>
+    new Promise<void>((res, rej) => getSocket(serverUrl).emit("media:play", { trackIndex }, r => r.ok ? res() : rej(new Error(r.error)))), [serverUrl])
+
+  const pauseMedia = useCallback(() =>
+    new Promise<void>((res, rej) => getSocket(serverUrl).emit("media:pause", {}, r => r.ok ? res() : rej(new Error(r.error)))), [serverUrl])
+
+  const nextTrack  = useCallback(() =>
+    new Promise<void>((res, rej) => getSocket(serverUrl).emit("media:next", {}, r => r.ok ? res() : rej(new Error(r.error)))), [serverUrl])
+
+  const prevTrack  = useCallback(() =>
+    new Promise<void>((res, rej) => getSocket(serverUrl).emit("media:prev", {}, r => r.ok ? res() : rej(new Error(r.error)))), [serverUrl])
+
+  const stopMedia  = useCallback(() =>
+    new Promise<void>((res, rej) => getSocket(serverUrl).emit("media:stop", {}, r => r.ok ? res() : rej(new Error(r.error)))), [serverUrl])
+
+  const playVideo  = useCallback((data: EvVideoPlay) =>
+    new Promise<void>((res, rej) => getSocket(serverUrl).emit("video:play", data, r => r.ok ? res() : rej(new Error(r.error)))), [serverUrl])
+
+  const pauseVideo = useCallback(() =>
+    new Promise<void>((res, rej) => getSocket(serverUrl).emit("video:pause", {}, r => r.ok ? res() : rej(new Error(r.error)))), [serverUrl])
+
+  const stopVideo  = useCallback(() =>
+    new Promise<void>((res, rej) => getSocket(serverUrl).emit("video:stop", {}, r => r.ok ? res() : rej(new Error(r.error)))), [serverUrl])
+
   return {
     status: store.status, sessionId: store.sessionId,
     participants: store.participants, tokens: store.tokens, npcTokens: store.npcTokens,
     activeScene: store.activeScene, fogCells: store.fogCells, lastError: store.lastError,
+    mediaState: store.mediaState, videoState: store.videoState,
     loadScene, moveToken, revealNote, disarmTrap, clearFog, spawnNpc, despawnNpc,
+    playMedia, pauseMedia, nextTrack, prevTrack, stopMedia,
+    playVideo, pauseVideo, stopVideo,
   }
 }
