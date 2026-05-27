@@ -20,7 +20,7 @@ export interface GameSystemMeta {
   name:        string
   description: string
   version:     string
-  price:       number    // 0 = gratuito; > 0 em créditos internos
+  price:       number
   tags:        string[]
   thumbnail?:  string
 }
@@ -28,4 +28,23 @@ export interface GameSystemMeta {
 export interface GameSystem extends GameSystemMeta {
   defaultData:    () => Record<string, unknown>
   CharacterSheet: ComponentType<CharacterSheetProps>
+}
+
+// ── Manifest — define campos da ficha para sistemas externos ──────────────────
+
+export interface ManifestField {
+  id:           string
+  label:        string
+  type:         "text" | "number" | "textarea" | "select" | "boolean"
+  options?:     string[]   // para type="select"
+  min?:         number
+  max?:         number
+  group?:       string     // agrupa campos em seções/abas
+  defaultValue?: string | number | boolean
+  required?:    boolean
+}
+
+export interface SystemManifest {
+  fields:           ManifestField[]
+  combatAbilities?: boolean  // exibe seção de habilidades de combate
 }

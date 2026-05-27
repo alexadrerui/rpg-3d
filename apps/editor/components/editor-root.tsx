@@ -1,5 +1,6 @@
 "use client"
 import { useCallback, useEffect, useRef } from "react"
+import { Raycaster, Vector2, Vector3, Plane } from "three"
 import { Editor, applySceneGraphToEditor, type SceneGraph, ItemsPanel } from "@pascal-app/editor"
 import { useScene }        from "@pascal-app/core"
 import { useViewer }       from "@pascal-app/viewer"
@@ -197,6 +198,51 @@ export function EditorRoot() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// screenToWorld — raycasting real contra o plano Y=0 usando a câmera R3F do
+// Pascal Editor. Acessa o estado interno do R3F via canvas.__r3f (API estável
+// no R3F 8/9). Snap de 0.5u. Fallback linear se a câmera não estiver pronta.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const _raycaster = new Raycaster()
+const _ndc       = new Vector2()
+const _hit       = new Vector3()
+const _ground    = new Plane(new Vector3(0, 1, 0), 0)
+
+function screenToWorld(
+  clientX: number,
+  clientY: number,
+  canvas: HTMLCanvasElement,
+): { x: number; y: number; z: number } {
+  const rect = canvas.getBoundingClientRect()
+
+  // Tenta acessar a câmera Three.js via estado interno do R3F
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const camera = (canvas as any).__r3f?.root?.getState?.()?.camera ?? null
+
+  if (camera) {
+    _ndc.set(
+      ((clientX - rect.left) / rect.width)  * 2 - 1,
+      -((clientY - rect.top) / rect.height) * 2 + 1,
+    )
+    _raycaster.setFromCamera(_ndc, camera)
+
+    if (_raycaster.ray.intersectPlane(_ground, _hit)) {
+      // Snap para grade de 0.5u (tiles do RPG)
+      return {
+        x: Math.round(_hit.x * 2) / 2,
+        y: 0,
+        z: Math.round(_hit.z * 2) / 2,
+      }
+    }
+  }
+
+  // Fallback: aproximação linear quando câmera não acessível (ex: primeiro frame)
+  const nx = (clientX - rect.left) / rect.width
+  const nz = (clientY - rect.top)  / rect.height
+  return { x: (nx - 0.5) * 30, y: 0, z: (nz - 0.5) * 30 }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // TriggerPlacementOverlay — captura cliques sobre o canvas do Pascal quando
 // uma tool RPG está ativa e cria o trigger na posição clicada
 // ─────────────────────────────────────────────────────────────────────────────
@@ -209,19 +255,10 @@ function TriggerPlacementOverlay({ onPublish }: { onPublish: () => void }) {
     if (!isPlacing) return
     e.stopPropagation()
 
-    // Converte posição de tela para world usando raycasting no plano Y=0
-    // Como estamos sobrepondo o canvas Pascal, usamos coordenadas normalizadas
-    const rect = e.currentTarget.getBoundingClientRect()
-    const nx   = (e.clientX - rect.left)  / rect.width
-    const nz   = (e.clientY - rect.top)   / rect.height
-
-    // Estimativa de world position no plano XZ (refinado com raycasting real)
-    const worldScale = 30
-    const pos = {
-      x: (nx - 0.5) * worldScale,
-      y: 0,
-      z: (nz - 0.5) * worldScale,
-    }
+    const canvas = document.querySelector("canvas")
+    const pos = canvas
+      ? screenToWorld(e.clientX, e.clientY, canvas)
+      : { x: 0, y: 0, z: 0 }
 
     let created
     switch (activeTool) {
@@ -235,7 +272,6 @@ function TriggerPlacementOverlay({ onPublish }: { onPublish: () => void }) {
 
     addTrigger(created)
     setSelectedId(created.id)
-    // Volta para select após colocar
     setActiveTool("select")
   }, [isPlacing, activeTool, addTrigger, setSelectedId, setActiveTool])
 

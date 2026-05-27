@@ -242,16 +242,41 @@ export const sessions = {
     apiFetch<{ session: ApiSession; logs: ApiSessionLog[] }>(`/sessions/${sessionId}/log`),
 }
 
+export type { ManifestField, SystemManifest } from "@rpg3d/game-systems"
+import type { ManifestField, SystemManifest } from "@rpg3d/game-systems"
+
 export type ApiGameSystem = {
   id: string; name: string; description: string
   price: number; version: string; tags: string[]
-  thumbnail?: string; isActive: boolean
-  isPurchased: boolean
+  thumbnail?: string | null; isActive: boolean
+  isPurchased?: boolean  // ausente em GET /systems/:id público
+  status: "PENDING" | "ACTIVE" | "REJECTED"
+  authorId?: string | null; authorName?: string | null
+  repositoryUrl?: string | null; manifest?: SystemManifest | null
+  createdAt: string
+}
+
+export type SubmitSystemData = {
+  id: string; name: string; description: string; manifest: SystemManifest
+  price?: number; version?: string; tags?: string[]
+  thumbnail?: string; repositoryUrl?: string
 }
 
 export const gameSystems = {
-  list: () =>
-    apiFetch<{ credits: number; systems: ApiGameSystem[] }>("/systems"),
+  list: (tag?: string) =>
+    apiFetch<{ credits: number; systems: ApiGameSystem[] }>(`/systems${tag ? `?tag=${encodeURIComponent(tag)}` : ""}`),
+
+  mine: () =>
+    apiFetch<ApiGameSystem[]>("/systems/mine"),
+
+  getDetail: (id: string) =>
+    apiFetch<ApiGameSystem>(`/systems/${id}`),
+
+  submit: (data: SubmitSystemData) =>
+    apiFetch<ApiGameSystem>("/systems", { method: "POST", body: JSON.stringify(data) }),
+
+  updateOwn: (id: string, data: Partial<Omit<SubmitSystemData, "id">>) =>
+    apiFetch<ApiGameSystem>(`/systems/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
 
   purchase: (systemId: string) =>
     apiFetch<{ ok: boolean; credits: number }>(`/systems/${systemId}/purchase`, { method: "POST" }),

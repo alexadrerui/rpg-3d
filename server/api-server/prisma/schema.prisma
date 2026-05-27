@@ -17,12 +17,13 @@ model User {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
-  ownedCampaigns  Campaign[]           @relation("CampaignMaster")
-  characters      Character[]
-  invites         CampaignInvite[]
-  uploadedAssets  Asset[]
-  systemPurchases UserSystemPurchase[]
-  refreshTokens   RefreshToken[]
+  ownedCampaigns    Campaign[]           @relation("CampaignMaster")
+  characters        Character[]
+  invites           CampaignInvite[]
+  uploadedAssets    Asset[]
+  systemPurchases   UserSystemPurchase[]
+  refreshTokens     RefreshToken[]
+  submittedSystems  GameSystemCatalog[]  @relation("SystemAuthor")
 }
 
 model Campaign {
@@ -140,18 +141,30 @@ model Asset {
 
 // ── Game Systems ───────────────────────────────────────────────────────────────
 
-model GameSystemCatalog {
-  id          String   @id        // "dnd5e", "generic"
-  name        String
-  description String
-  price       Int      @default(0)         // em créditos internos (0 = gratuito)
-  version     String   @default("1.0.0")
-  thumbnail   String?
-  tags        String[]
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
+enum SystemStatus {
+  PENDING
+  ACTIVE
+  REJECTED
+}
 
-  purchases   UserSystemPurchase[]
+model GameSystemCatalog {
+  id            String        @id        // "dnd5e", "generic", ou slug externo
+  name          String
+  description   String
+  price         Int           @default(0)
+  version       String        @default("1.0.0")
+  thumbnail     String?
+  tags          String[]
+  isActive      Boolean       @default(true)
+  status        SystemStatus  @default(PENDING)
+  authorId      String?
+  authorName    String?
+  repositoryUrl String?
+  manifest      Json?         // ManifestField[] — define campos da ficha para sistemas externos
+  createdAt     DateTime      @default(now())
+
+  author    User?              @relation("SystemAuthor", fields: [authorId], references: [id])
+  purchases UserSystemPurchase[]
 }
 
 model UserSystemPurchase {
