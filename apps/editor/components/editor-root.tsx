@@ -32,13 +32,15 @@ const TRIGGER_STORAGE_KEY = "rpg3d-editor-triggers"
 export function EditorRoot() {
   const { triggers, setTriggers } = useTriggerStore()
   const { env }                   = useEnvironmentStore()
-  const publishedRef = useRef(false)
+  const publishedRef  = useRef(false)
+  const publishTimer  = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // ── Configura tema escuro no viewer ──────────────────────────────────────
   useEffect(() => {
     useViewer.getState().setTheme("dark")
     useViewer.getState().setCameraMode("orthographic")
     useViewer.getState().setWallMode("cutaway")
+    return () => { if (publishTimer.current) clearTimeout(publishTimer.current) }
   }, [])
 
   // ── Persistência de triggers separada do scene do Pascal ─────────────────
@@ -129,7 +131,8 @@ export function EditorRoot() {
       downloadScene(scene)
     }
 
-    setTimeout(() => { publishedRef.current = false }, 2000)
+    if (publishTimer.current) clearTimeout(publishTimer.current)
+    publishTimer.current = setTimeout(() => { publishedRef.current = false }, 2000)
   }, [triggers, env])
 
   // ── Sidebar tabs: os do Pascal + aba de triggers RPG ──────────────────────
@@ -249,13 +252,15 @@ function screenToWorld(
 
 function TriggerPlacementOverlay({ onPublish }: { onPublish: () => void }) {
   const { activeTool, addTrigger, setSelectedId, setActiveTool } = useTriggerStore()
-  const isPlacing = activeTool && activeTool !== "select"
+  const isPlacing   = activeTool && activeTool !== "select"
+  const canvasRef   = useRef<HTMLCanvasElement | null>(null)
 
   const handleClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     if (!isPlacing) return
     e.stopPropagation()
 
-    const canvas = document.querySelector("canvas")
+    if (!canvasRef.current) canvasRef.current = document.querySelector("canvas")
+    const canvas = canvasRef.current
     const pos = canvas
       ? screenToWorld(e.clientX, e.clientY, canvas)
       : { x: 0, y: 0, z: 0 }

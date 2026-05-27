@@ -1,5 +1,5 @@
 "use client"
-import { useCallback, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { useEditorAuthStore } from "../../store/auth-store"
 import { useAssetStore }      from "../../store/asset-store"
 import { uploadAsset }        from "../../lib/upload-asset"
@@ -41,7 +41,13 @@ export function AssetSidebarTab() {
   const { token, apiUrl, campaignId, sceneName, setToken, setApiUrl, setCampaignId, setSceneName, clear } =
     useEditorAuthStore()
   const { models, textures, audio, videos, addModel, addTexture, addAudio, addVideo, removeAsset } = useAssetStore()
-  const [uploads, setUploads] = useState<Record<string, UploadEntry>>({})
+  const [uploads, setUploads]  = useState<Record<string, UploadEntry>>({})
+  const uploadTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+
+  useEffect(() => {
+    const timers = uploadTimers.current
+    return () => { timers.forEach(id => clearTimeout(id)); timers.clear() }
+  }, [])
 
   // ── sem token: painel de conexão ─────────────────────────────────────────
 
@@ -72,7 +78,11 @@ export function AssetSidebarTab() {
         if (kind === "video")   addVideo(asset)
 
         setUploads((u) => ({ ...u, [key]: { ...u[key]!, status: "done", progress: 100 } }))
-        setTimeout(() => setUploads((u) => { const { [key]: _, ...rest } = u; return rest }), 3000)
+        const tid = setTimeout(() => {
+          setUploads((u) => { const { [key]: _, ...rest } = u; return rest })
+          uploadTimers.current.delete(key)
+        }, 3000)
+        uploadTimers.current.set(key, tid)
       } catch (err) {
         setUploads((u) => ({
           ...u,
