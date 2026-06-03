@@ -16,10 +16,11 @@ import {
   EvVideoPlay,
   EvSheetUpdate,
   EvCombatSetHp,
+  EvCombatUseAbility,
   type CombatantEntry,
   type AnyTriggerNode,
 } from "@rpg3d/schema"
-import { rollDice }         from "@rpg3d/dice-engine"
+import { rollDice, rollFormula } from "@rpg3d/dice-engine"
 import { SessionManager }   from "./session-manager.js"
 import { logQueue }         from "./log-queue.js"
 import {
@@ -38,6 +39,17 @@ import type { JwtPayload }  from "./auth.js"
 
 const API_URL       = process.env.API_URL       ?? "http://localhost:4000"
 const SERVER_SECRET = process.env.SERVER_SECRET ?? "dev-server-secret"
+
+// Forma da habilidade como persistida no sheetData (subset relevante p/ resolução)
+type AbilityData = {
+  id:         string
+  name?:      string
+  resource?:  string
+  effect?:    "damage" | "heal" | "none"
+  dice?:      string
+  attribute?: string
+  bonus?:     number
+}
 const STORAGE_URL   = process.env.STORAGE_PUBLIC_URL ?? `${API_URL}/scenes`
 
 async function fetchSceneUrl(sceneId: string): Promise<string> {
@@ -813,6 +825,92 @@ export function registerHandlers(
     sessions.setCombatantHp(room, parsed.data.combatantId, parsed.data.hp)
     io.to(currentSessionId!).emit("combat:state", sessions.getCombatState(room))
     cb({ ok: true, data: undefined })
+  })
+
+  // ── combat:use_ability ────────────────────────────────────────────────────
+  // O ator do turno usa uma habilidade contra um alvo. O servidor lê a
+  // habilidade do sheetState do ator, rola o dado + modificador de atributo e
+  // aplica dano/cura ao alvo de forma autoritativa.
+
+  socket.on("combat:use_ability", (raw, cb) => {
+    const parsed = EvCombatUseAbility.safeParse(raw)
+    if (!parsed.success) return cb({ ok: false, error: "INVALID_PAYLOAD" })
+
+    const room = currentSessionId ? sessions.get(currentSessionId) : null
+    if (!room) return cb({ ok: false, error: "NOT_IN_ROOM" })
+    if (!room.combat.active) return cb({ ok: false, error: "NO_COMBAT" })
+
+    const actor = sessions.getCurrentActor(room)
+    if (!actor) return cb({ ok: false, error: "NO_ACTOR" })
+
+    // Apenas o dono do ator atual (ou o mestre) pode agir no turno
+    const participant   = room.participants.get(user.sub)
+    const isMaster      = sessions.isMaster(room, user.sub)
+    const isCurrentActor = !!participant?.characterId && participant.characterId === actor.id
+    if (!isCurrentActor && !isMaster) return cb({ ok: false, error: "NOT_YOUR_TURN" })
+
+    // Localiza a habilidade no sheetState do ator
+    const actorSheet = room.sheetStates.get(actor.id) ?? {}
+    const abilities  = Array.isArray(actorSheet.combatAbilities)
+      ? (actorSheet.combatAbilities as AbilityData[]) : []
+    const ability = abilities.find(a => a?.id === parsed.data.abilityId)
+    if (!ability) return cb({ ok: false, error: "ABILITY_NOT_FOUND" })
+
+    const target = sessions.getCombatant(room, parsed.data.targetId)
+    if (!target) return cb({ ok: false, error: "TARGET_NOT_FOUND" })
+
+    // Modificador de atributo (estilo D&D): floor((valor - 10) / 2)
+    let attrMod = 0
+    if (ability.attribute && typeof actorSheet[ability.attribute] === "number") {
+      attrMod = Math.floor(((actorSheet[ability.attribute] as number) - 10) / 2)
+    }
+    const flatBonus = typeof ability.bonus === "number" ? ability.bonus : 0
+    const effect    = ability.effect === "damage" || ability.effect === "heal" ? ability.effect : "none"
+
+    // Rola o dado (se houver) + modificadores
+    const { rolls, total, modifier } = rollFormula(ability.dice ?? "", attrMod + flatBonus)
+    const amount = Math.max(0, total)
+
+    // Aplica ao alvo
+    let targetHpBefore: number | null = target.hp
+    let targetHpAfter:  number | null = target.hp
+    let defeated = target.isDefeated
+    if (effect !== "none" && amount !== 0) {
+      const delta  = effect === "heal" ? amount : -amount
+      const result = sessions.applyCombatantHpDelta(room, target.id, delta)
+      if (result) {
+        targetHpBefore = result.before
+        targetHpAfter  = result.after
+        defeated       = result.defeated
+      }
+    }
+
+    // Consome a economia de ação do ator
+    sessions.consumeActorEconomy(room, actor.id, ability.resource ?? "")
+
+    // Broadcast: estado de combate atualizado + resultado para o log
+    io.to(currentSessionId!).emit("combat:state", sessions.getCombatState(room))
+    io.to(currentSessionId!).emit("combat:ability_result", {
+      actorId:        actor.id,
+      actorName:      actor.name,
+      targetId:       target.id,
+      targetName:     target.name,
+      abilityName:    ability.name ?? "Habilidade",
+      effect,
+      rolls,
+      modifier,
+      total:          amount,
+      targetHpBefore,
+      targetHpAfter,
+      defeated,
+    })
+
+    // Espelha o HP do alvo na ficha (se rastreado)
+    const targetSheet = room.sheetStates.get(target.id)
+    if (targetSheet) io.to(currentSessionId!).emit("sheet:state", { characterId: target.id, data: targetSheet })
+
+    cb({ ok: true, data: undefined })
+    console.log(`[combat:use_ability] ${actor.name} → ${ability.name} → ${target.name} (${effect} ${amount})`)
   })
 
   // ── sheet:update ──────────────────────────────────────────────────────────

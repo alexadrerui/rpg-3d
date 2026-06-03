@@ -36,6 +36,8 @@ import type {
   EvCombatNextTurn,
   EvCombatEnd,
   EvCombatSetHp,
+  EvCombatUseAbility,
+  EvCombatAbilityResult,
 } from "./events.js"
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -57,6 +59,7 @@ export interface ServerToClientMap {
   "video:state":       (data: EvVideoState)        => void
   "sheet:state":       (data: EvSheetState)        => void
   "combat:state":      (data: EvCombatState)       => void
+  "combat:ability_result": (data: EvCombatAbilityResult) => void
   "error":             (data: { code: string; message: string }) => void
   "ping":              () => void
 }
@@ -85,6 +88,7 @@ export interface ClientToServerMap {
   "combat:next_turn": (data: EvCombatNextTurn,  cb: AckFn) => void
   "combat:end":       (data: EvCombatEnd,       cb: AckFn) => void
   "combat:set_hp":    (data: EvCombatSetHp,     cb: AckFn) => void
+  "combat:use_ability": (data: EvCombatUseAbility, cb: AckFn) => void
   "pong":             () => void
 }
 

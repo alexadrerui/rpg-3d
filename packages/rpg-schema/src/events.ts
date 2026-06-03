@@ -300,6 +300,28 @@ export const EvCombatSetHp = z.object({
   hp:          z.number().int().min(0),
 })
 
+/** C→S (ator do turno): usa uma habilidade contra um alvo — server resolve */
+export const EvCombatUseAbility = z.object({
+  abilityId: z.string(),
+  targetId:  z.string(),
+})
+
+/** S→C: resultado da resolução de uma habilidade (para o combat log) */
+export const EvCombatAbilityResult = z.object({
+  actorId:        z.string(),
+  actorName:      z.string(),
+  targetId:       z.string(),
+  targetName:     z.string(),
+  abilityName:    z.string(),
+  effect:         z.enum(["damage", "heal", "none"]),
+  rolls:          z.array(z.number().int()),
+  modifier:       z.number().int(),
+  total:          z.number().int(),
+  targetHpBefore: z.number().int().nullable(),
+  targetHpAfter:  z.number().int().nullable(),
+  defeated:       z.boolean(),
+})
+
 // ── FICHAS ───────────────────────────────────────────────────────────────────
 
 /** C→S: player updates their sheet during a session (HP, resources, etc.) */
@@ -344,6 +366,7 @@ export const ServerToClientEvents = {
   "video:state":         EvVideoState,
   "sheet:state":         EvSheetState,
   "combat:state":        EvCombatState,
+  "combat:ability_result": EvCombatAbilityResult,
 } as const
 
 export const ClientToServerEvents = {
@@ -370,6 +393,7 @@ export const ClientToServerEvents = {
   "combat:next_turn":    EvCombatNextTurn,
   "combat:end":          EvCombatEnd,
   "combat:set_hp":       EvCombatSetHp,
+  "combat:use_ability":  EvCombatUseAbility,
 } as const
 
 export type EvMediaPlay         = z.infer<typeof EvMediaPlay>
@@ -387,6 +411,8 @@ export type EvCombatStart       = z.infer<typeof EvCombatStart>
 export type EvCombatNextTurn    = z.infer<typeof EvCombatNextTurn>
 export type EvCombatEnd         = z.infer<typeof EvCombatEnd>
 export type EvCombatSetHp       = z.infer<typeof EvCombatSetHp>
+export type EvCombatUseAbility   = z.infer<typeof EvCombatUseAbility>
+export type EvCombatAbilityResult = z.infer<typeof EvCombatAbilityResult>
 export type EvSheetUpdate       = z.infer<typeof EvSheetUpdate>
 export type EvSheetState        = z.infer<typeof EvSheetState>
 export type EvJoinRoom          = z.infer<typeof EvJoinRoom>

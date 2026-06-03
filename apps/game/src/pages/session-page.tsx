@@ -15,6 +15,8 @@ import { VideoPlayer }         from "../components/hud/video-player"
 import { CinematicOverlay }    from "../components/hud/cinematic-overlay"
 import { CharacterSheetPanel } from "../components/hud/character-sheet-panel"
 import { CombatTracker }       from "../components/hud/combat-tracker"
+import { CombatLog }           from "../components/hud/combat-log"
+import type { CombatLogEntry } from "../components/hud/combat-log"
 import type { CombatAbility }  from "../components/hud/combat-overlay"
 import { useSceneStore }  from "../store/scene-store"
 import { characters }     from "../lib/api-client"
@@ -42,6 +44,10 @@ export function SessionPage() {
       if (ev.trigger.type === "trigger_trap") disarmTrap(ev.trigger.id)
       if (ev.trigger.type === "trigger_note") revealNote(ev.trigger.id)
     },
+
+    onAbilityResult: (res) => {
+      setCombatLog(prev => [...prev, { ...res, _key: Date.now() + Math.random() }].slice(-4))
+    },
   })
 
   const isMaster = auth.isMaster
@@ -67,6 +73,7 @@ export function SessionPage() {
   const [sheetPanelOpen, setSheetPanelOpen] = useState(false)
   const [sheetData,     setSheetData]     = useState<Record<string, unknown>>({})
   const [systemId,      setSystemId]      = useState("generic")
+  const [combatLog,     setCombatLog]     = useState<CombatLogEntry[]>([])
 
   // Carrega ficha + systemId do personagem ao entrar na sessão
   useEffect(() => {
@@ -204,8 +211,24 @@ export function SessionPage() {
         {combatMode && !isMaster && (
           <CombatOverlay
             abilities={charAbilities}
+            combatants={room.combatState?.combatants ?? []}
+            myCharacterId={auth.characterId}
             onExit={() => setCombatMode(false)}
+            onUseAbility={(ab, targetId) => room.useAbility(ab.id, targetId).catch(console.error)}
           />
+        )}
+
+        {/* COMBAT LOG — feed de resoluções (center top, abaixo do tracker) */}
+        {combatLog.length > 0 && (
+          <div
+            className="absolute left-1/2 -translate-x-1/2 pointer-events-none"
+            style={{ top: room.combatState?.active ? "64px" : "56px" }}
+          >
+            <CombatLog
+              entries={combatLog}
+              onExpire={(key) => setCombatLog(prev => prev.filter(e => e._key !== key))}
+            />
+          </div>
         )}
 
         {/* Botões de ação do jogador — ficha + combate */}

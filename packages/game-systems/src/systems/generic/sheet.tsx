@@ -118,6 +118,39 @@ export function GenericCharacterSheet({ data, onSave, saving, readOnly }: Charac
                   disabled={readOnly} className={`${inputCls} resize-none`} rows={2}
                   placeholder="Efeito, condição, dano..." />
               </Field>
+
+              {/* ── Resolução em combate ── */}
+              <div className="border-t border-neutral-800/70 pt-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <Field label="Efeito">
+                  <select value={ab.effect ?? "none"} disabled={readOnly}
+                    onChange={e => updAbility(ab.id, { effect: e.target.value as CombatAbility["effect"] })}
+                    className={inputCls}>
+                    <option value="none">— Nenhum</option>
+                    <option value="damage">Dano</option>
+                    <option value="heal">Cura</option>
+                  </select>
+                </Field>
+                <Field label="Dado">
+                  <input value={ab.dice ?? ""} disabled={readOnly}
+                    onChange={e => updAbility(ab.id, { dice: e.target.value })}
+                    placeholder="1d8" className={`${inputCls} font-mono`} />
+                </Field>
+                <Field label="Bônus">
+                  <input type="number" value={ab.bonus ?? 0} disabled={readOnly}
+                    onChange={e => updAbility(ab.id, { bonus: Number(e.target.value) || undefined })}
+                    className={`${inputCls} text-center`} />
+                </Field>
+                <Field label="Alvo">
+                  <select value={ab.targeting ?? (ab.effect === "heal" ? "ally" : "enemy")} disabled={readOnly}
+                    onChange={e => updAbility(ab.id, { targeting: e.target.value as CombatAbility["targeting"] })}
+                    className={inputCls}>
+                    <option value="enemy">Inimigo</option>
+                    <option value="ally">Aliado</option>
+                    <option value="self">Próprio</option>
+                    <option value="any">Qualquer</option>
+                  </select>
+                </Field>
+              </div>
             </div>
           ))}
         </div>

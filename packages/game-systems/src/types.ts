@@ -7,12 +7,23 @@ export interface CharacterSheetProps {
   readOnly?: boolean
 }
 
+/** Como uma habilidade é resolvida quando usada contra um alvo em combate. */
+export type AbilityEffect    = "damage" | "heal" | "none"
+export type AbilityTargeting = "enemy" | "ally" | "self" | "any"
+
 export interface CombatAbility {
   id:          string
   name:        string
   description: string
   cost:        number
   resource:    string  // "PD", "PM", "PA", "Ação", "Gratuito", etc.
+
+  // ── Resolução (opcional — ausente = só narrativa) ──────────────────────────
+  effect?:     AbilityEffect      // dano, cura ou nenhum (default "none")
+  dice?:       string             // fórmula rolada pelo servidor, ex: "1d8", "2d6"
+  attribute?:  string             // chave do sheet cujo modificador (D&D) é somado, ex: "strength"
+  bonus?:      number             // bônus fixo somado ao total
+  targeting?:  AbilityTargeting   // quem pode ser alvo (default "enemy")
 }
 
 export interface GameSystemMeta {

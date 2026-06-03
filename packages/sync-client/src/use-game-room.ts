@@ -7,11 +7,12 @@ import type {
   EvMessageReceived, EvDiceResult, EvTriggerActivated,
   EvJoinRoom, EvLoadScene, EvSpawnNpc, EvDespawnNpc,
   EvMediaState, EvVideoState, EvVideoPlay,
-  EvCombatState, CombatantEntry,
+  EvCombatState, CombatantEntry, EvCombatAbilityResult,
 } from "@rpg3d/schema"
 
-export type { CombatantEntry }
+export type { CombatantEntry, EvCombatAbilityResult }
 export type CombatState = EvCombatState
+export type CombatAbilityResult = EvCombatAbilityResult
 
 // ── Estado Zustand ────────────────────────────────────────────────────────────
 export type GameRoomStatus = "disconnected" | "connecting" | "connected" | "error"
@@ -115,6 +116,7 @@ export type UseGameRoomOptions = {
   onMessage?:          (d: EvMessageReceived) => void
   onDiceResult?:       (d: EvDiceResult) => void
   onFogRevealed?:      (c: FogCell[]) => void
+  onAbilityResult?:    (d: EvCombatAbilityResult) => void
 }
 
 export function useGameRoom(opts: UseGameRoomOptions) {
@@ -147,6 +149,7 @@ export function useGameRoom(opts: UseGameRoomOptions) {
     socket.on("video:state",   (d) => store._setVideoState(d))
     socket.on("sheet:state",   ({ characterId, data }) => store._setSheetState(characterId, data))
     socket.on("combat:state",  (d) => store._setCombatState(d))
+    socket.on("combat:ability_result", (d) => cbRef.current.onAbilityResult?.(d))
     socket.on("error",         ({ message }) => { store._setError(message); store._setStatus("error") })
     socket.on("connect_error", (err)         => { store._setError(err.message); store._setStatus("error") })
     socket.on("ping", () => socket.emit("pong"))
@@ -165,6 +168,7 @@ export function useGameRoom(opts: UseGameRoomOptions) {
         .off("chat:message").off("dice:result")
         .off("trigger:activated").off("fog:revealed")
         .off("media:state").off("video:state").off("sheet:state").off("combat:state")
+        .off("combat:ability_result")
         .off("error").off("connect_error").off("ping")
     }
   }, [sessionId, campaignId, characterId, token, serverUrl, avatarType, avatarUrl])
@@ -235,6 +239,9 @@ export function useGameRoom(opts: UseGameRoomOptions) {
   const setCombatantHp = useCallback((combatantId: string, hp: number) =>
     new Promise<void>((res, rej) => getSocket(serverUrl).emit("combat:set_hp", { combatantId, hp }, r => r.ok ? res() : rej(new Error(r.error)))), [serverUrl])
 
+  const useAbility = useCallback((abilityId: string, targetId: string) =>
+    new Promise<void>((res, rej) => getSocket(serverUrl).emit("combat:use_ability", { abilityId, targetId }, r => r.ok ? res() : rej(new Error(r.error)))), [serverUrl])
+
   const updateSheet = useCallback((characterId: string, patch: Record<string, unknown>) =>
     new Promise<void>((res, rej) => {
       useRoomStore.getState()._setSheetState(characterId, patch)
@@ -252,6 +259,6 @@ export function useGameRoom(opts: UseGameRoomOptions) {
     loadScene, moveToken, revealNote, disarmTrap, clearFog, spawnNpc, despawnNpc,
     playMedia, pauseMedia, nextTrack, prevTrack, stopMedia,
     playVideo, pauseVideo, stopVideo,
-    updateSheet, startCombat, nextCombatTurn, endCombat, setCombatantHp,
+    updateSheet, startCombat, nextCombatTurn, endCombat, setCombatantHp, useAbility,
   }
 }

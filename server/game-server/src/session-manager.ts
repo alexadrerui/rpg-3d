@@ -292,8 +292,63 @@ export class SessionManager {
     if (!combatant) return
     combatant.hp = Math.max(0, hp)
     combatant.isDefeated = combatant.hp <= 0
+    this.syncSheetHp(room, id, combatant.hp)
     this.touch(room)
     this.persist(room)
+  }
+
+  getCombatant(room: RoomState, id: string): CombatantEntry | undefined {
+    return room.combat.combatants.find(c => c.id === id)
+  }
+
+  /** Combatente cujo turno está em curso (undefined se sem combate). */
+  getCurrentActor(room: RoomState): CombatantEntry | undefined {
+    if (!room.combat.active) return undefined
+    return room.combat.combatants[room.combat.turnIndex]
+  }
+
+  /**
+   * Aplica um delta de HP a um combatente (dano negativo, cura positivo),
+   * clampando entre 0 e maxHp. Espelha no sheetState para a ficha refletir.
+   * Retorna o estado antes/depois, ou null se o combatente não existir.
+   */
+  applyCombatantHpDelta(room: RoomState, id: string, delta: number): { before: number | null; after: number | null; defeated: boolean } | null {
+    const combatant = room.combat.combatants.find(c => c.id === id)
+    if (!combatant) return null
+    const before = combatant.hp
+    if (before == null) {
+      // Combatente sem HP rastreado (ex: NPC sem ficha) — registra "morto" só se dano e marca defeated
+      return { before: null, after: null, defeated: combatant.isDefeated }
+    }
+    let after = before + delta
+    if (after < 0) after = 0
+    if (combatant.maxHp != null && after > combatant.maxHp) after = combatant.maxHp
+    combatant.hp = after
+    combatant.isDefeated = after <= 0
+    this.syncSheetHp(room, id, after)
+    this.touch(room)
+    this.persist(room)
+    return { before, after, defeated: combatant.isDefeated }
+  }
+
+  /** Consome a economia de ação do ator conforme o recurso da habilidade. */
+  consumeActorEconomy(room: RoomState, actorId: string, resource: string): void {
+    const actor = room.combat.combatants.find(c => c.id === actorId)
+    if (!actor) return
+    const r = resource.toLowerCase()
+    if (r.startsWith("bôn") || r.startsWith("bon")) actor.hasBonusAction = false
+    else if (r.startsWith("gratu")) { /* gratuito — não consome */ }
+    else actor.hasAction = false
+    this.touch(room)
+    this.persist(room)
+  }
+
+  /** Espelha o HP no sheetState do personagem (se houver) para o painel de ficha. */
+  private syncSheetHp(room: RoomState, characterId: string, hp: number): void {
+    const sheet = room.sheetStates.get(characterId)
+    if (sheet && typeof sheet.hp === "number") {
+      room.sheetStates.set(characterId, { ...sheet, hp })
+    }
   }
 
   getCombatState(room: RoomState): EvCombatState {

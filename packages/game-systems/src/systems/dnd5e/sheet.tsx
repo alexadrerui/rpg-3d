@@ -342,6 +342,15 @@ function AvatarStep({ sheet, onSave, saving, readOnly, onBack, onNext }: {
 
 const RESOURCES = ["PD", "PM", "PA", "PE", "Ação", "Bônus", "Gratuito"]
 
+const ABILITY_ATTRS = [
+  { key: "strength",     label: "Força" },
+  { key: "dexterity",    label: "Destreza" },
+  { key: "constitution", label: "Constituição" },
+  { key: "intelligence", label: "Inteligência" },
+  { key: "wisdom",       label: "Sabedoria" },
+  { key: "charisma",     label: "Carisma" },
+]
+
 function AbilitiesStep({ sheet, onSave, saving, readOnly, onBack }: {
   sheet: Record<string, unknown>; onSave: (p: Record<string, unknown>) => Promise<void>
   saving: boolean; readOnly?: boolean; onBack: () => void
@@ -420,6 +429,47 @@ function AbilitiesStep({ sheet, onSave, saving, readOnly, onBack }: {
                 rows={2}
                 placeholder="+3d8 de dano em um alvo desprevenido ou flanqueado." />
             </Field>
+
+            {/* ── Resolução em combate ── */}
+            <div className="border-t border-neutral-800/70 pt-3 grid grid-cols-2 sm:grid-cols-5 gap-2">
+              <Field label="Efeito">
+                <select value={ab.effect ?? "none"} disabled={readOnly}
+                  onChange={e => upd(ab.id, { effect: e.target.value as CombatAbility["effect"] })}
+                  className={inputCls}>
+                  <option value="none">— Nenhum</option>
+                  <option value="damage">Dano</option>
+                  <option value="heal">Cura</option>
+                </select>
+              </Field>
+              <Field label="Dado">
+                <input value={ab.dice ?? ""} disabled={readOnly}
+                  onChange={e => upd(ab.id, { dice: e.target.value })}
+                  placeholder="1d8" className={`${inputCls} font-mono`} />
+              </Field>
+              <Field label="Atributo">
+                <select value={ab.attribute ?? ""} disabled={readOnly}
+                  onChange={e => upd(ab.id, { attribute: e.target.value || undefined })}
+                  className={inputCls}>
+                  <option value="">— Nenhum</option>
+                  {ABILITY_ATTRS.map(a => <option key={a.key} value={a.key}>{a.label}</option>)}
+                </select>
+              </Field>
+              <Field label="Bônus">
+                <input type="number" value={ab.bonus ?? 0} disabled={readOnly}
+                  onChange={e => upd(ab.id, { bonus: Number(e.target.value) || undefined })}
+                  className={`${inputCls} text-center`} />
+              </Field>
+              <Field label="Alvo">
+                <select value={ab.targeting ?? (ab.effect === "heal" ? "ally" : "enemy")} disabled={readOnly}
+                  onChange={e => upd(ab.id, { targeting: e.target.value as CombatAbility["targeting"] })}
+                  className={inputCls}>
+                  <option value="enemy">Inimigo</option>
+                  <option value="ally">Aliado</option>
+                  <option value="self">Próprio</option>
+                  <option value="any">Qualquer</option>
+                </select>
+              </Field>
+            </div>
           </div>
         ))}
       </div>
