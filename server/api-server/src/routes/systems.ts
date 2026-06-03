@@ -256,6 +256,15 @@ const BUILT_IN_SYSTEMS = [
     status:      "ACTIVE" as const,
     isActive:    true,
   },
+  {
+    id:          "ordem-paranormal",
+    name:        "Ordem Paranormal",
+    description: "Sistema de horror e investigação da Jambô Editora. Agentes da Ordem enfrentam o Outro Lado com NEX, atributos, perícias, classes e rituais. Fan content não-oficial.",
+    price:       500,
+    tags:        ["horror", "investigação", "moderno", "ordem-paranormal"],
+    status:      "ACTIVE" as const,
+    isActive:    true,
+  },
 ]
 
 export async function seedSystems(): Promise<void> {

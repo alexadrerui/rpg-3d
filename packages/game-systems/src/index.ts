@@ -2,4 +2,5 @@ export type { GameSystem, GameSystemMeta, CharacterSheetProps, CombatAbility, Ma
 export { systemRegistry }                      from "./registry.js"
 export { genericSystem }                       from "./systems/generic/index.js"
 export { dnd5eSystem }                         from "./systems/dnd5e/index.js"
+export { ordemParanormalSystem }               from "./systems/ordem-paranormal/index.js"
 export { createManifestSystem, ManifestCharacterSheet } from "./manifest-sheet.js"
