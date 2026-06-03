@@ -8,18 +8,33 @@ import { extractIp, hashIp } from "../lib/ip-hash.js"
 
 export const authRouter: ReturnType<typeof Router> = Router()
 
+// Gera código de mestre curto e legível (sem caracteres ambíguos: 0/O, 1/I/L)
+const CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+function makeMasterCode(): string {
+  return Array.from({ length: 6 }, () => CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]).join("")
+}
+async function uniqueMasterCode(): Promise<string> {
+  for (let i = 0; i < 20; i++) {
+    const code = makeMasterCode()
+    const exists = await prisma.user.findUnique({ where: { masterCode: code }, select: { id: true } })
+    if (!exists) return code
+  }
+  throw new Error("masterCode collision exhausted")
+}
+
 // ── POST /auth/register ───────────────────────────────────────────────────────
 const RegisterSchema = z.object({
-  email:    z.string().email(),
-  name:     z.string().min(2).max(60),
-  password: z.string().min(8),
+  email:       z.string().email(),
+  name:        z.string().min(2).max(60),
+  password:    z.string().min(8),
+  defaultRole: z.enum(["master", "player"]).default("player"),
 })
 
 authRouter.post("/register", async (req, res) => {
   const parsed = RegisterSchema.safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return }
 
-  const { email, name, password } = parsed.data
+  const { email, name, password, defaultRole } = parsed.data
 
   const existing = await prisma.user.findUnique({ where: { email } })
   if (existing) { res.status(409).json({ error: "EMAIL_TAKEN" }); return }
@@ -27,14 +42,15 @@ authRouter.post("/register", async (req, res) => {
   const hash             = await bcrypt.hash(password, 12)
   const rawIp            = extractIp(req)
   const registrationIpHash = rawIp ? hashIp(rawIp) : null
+  const masterCode       = await uniqueMasterCode()
   const user = await prisma.user.create({
-    data: { email, name, password: hash, registrationIpHash },
+    data: { email, name, password: hash, defaultRole, masterCode, registrationIpHash },
   })
 
   const token        = signToken({ sub: user.id, name: user.name, email: user.email })
   const refreshToken = signRefreshToken(user.id)
   await prisma.refreshToken.create({ data: { token: refreshToken, userId: user.id, expiresAt: refreshExpiresAt() } })
-  res.status(201).json({ token, refreshToken, user: { id: user.id, name: user.name, email: user.email } })
+  res.status(201).json({ token, refreshToken, user: { id: user.id, name: user.name, email: user.email, defaultRole: user.defaultRole, masterCode: user.masterCode } })
 })
 
 // ── POST /auth/login ──────────────────────────────────────────────────────────
@@ -62,11 +78,22 @@ authRouter.post("/login", async (req, res) => {
 
 // ── GET /auth/me ──────────────────────────────────────────────────────────────
 authRouter.get("/me", requireAuth, async (req, res) => {
-  const user = await prisma.user.findUnique({
+  let user = await prisma.user.findUnique({
     where:  { id: req.user!.sub },
-    select: { id: true, name: true, email: true, createdAt: true },
+    select: { id: true, name: true, email: true, createdAt: true, defaultRole: true, masterCode: true },
   })
   if (!user) { res.status(404).json({ error: "NOT_FOUND" }); return }
+
+  // Gera masterCode para usuários cadastrados antes da feature
+  if (!user.masterCode) {
+    const code = await uniqueMasterCode()
+    user = await prisma.user.update({
+      where:  { id: user.id },
+      data:   { masterCode: code },
+      select: { id: true, name: true, email: true, createdAt: true, defaultRole: true, masterCode: true },
+    })
+  }
+
   res.json(user)
 })
 

@@ -5,9 +5,10 @@ import {
   characters as charsApi,
   scenes as scenesApi,
   sessions as sessionsApi,
+  masters as mastersApi,
   setApiToken,
   type ApiCampaign, type ApiScene, type ApiCharacter, type ApiUser,
-  type ApiSession, type ApiSessionLog,
+  type ApiSession, type ApiSessionLog, type ApiJoinRequest,
 } from "../lib/api-client"
 import { exportSessionPdf } from "../lib/export-session-pdf"
 import { useAuthStore } from "../store/auth-store"
@@ -40,6 +41,8 @@ export function CampaignDetailPage() {
   const [expandedSession, setExpanded]    = useState<string | null>(null)
   const [sessionLogs, setSessionLogs]     = useState<Record<string, ApiSessionLog[]>>({})
   const [loadingLog, setLoadingLog]       = useState<string | null>(null)
+  const [joinRequests, setJoinRequests]   = useState<ApiJoinRequest[]>([])
+  const [reviewing, setReviewing]         = useState<string | null>(null)
 
   useEffect(() => { if (token) setApiToken(token) }, [token])
 
@@ -54,6 +57,7 @@ export function CampaignDetailPage() {
   useEffect(() => {
     if (!id || !token) return
     sessionsApi.list(id).then(setPastSessions).catch(() => {})
+    mastersApi.listRequests().then(reqs => setJoinRequests(reqs.filter(r => r.campaignId === id))).catch(() => {})
   }, [id, token])
 
   const handleApprove = async (charId: string) => {
@@ -127,6 +131,26 @@ export function CampaignDetailPage() {
     } finally { setStarting(false) }
   }
 
+  const handleReviewJoin = async (reqId: string, action: "approve" | "reject") => {
+    setReviewing(reqId)
+    try {
+      await mastersApi.reviewRequest(reqId, action)
+      setJoinRequests(prev => prev.filter(r => r.id !== reqId))
+      if (action === "approve") {
+        const req = joinRequests.find(r => r.id === reqId)
+        if (req) setCampaign(prev => prev ? {
+          ...prev,
+          characters: [...prev.characters, {
+            id: reqId, campaignId: req.campaignId, userId: req.playerId,
+            name: req.player.name, sheetData: {}, approved: true,
+            createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+            user: req.player,
+          }],
+        } : null)
+      }
+    } finally { setReviewing(null) }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -162,10 +186,10 @@ export function CampaignDetailPage() {
           <span className="text-neutral-700">/</span>
           <h1 className="text-sm font-medium text-neutral-200">{campaign.name}</h1>
           <span className={clsx(
-            "text-xs px-2 py-0.5 rounded border",
+            "text-[10px] px-2 py-0.5 rounded-full border font-medium",
             isMaster
-              ? "bg-purple-900/40 text-purple-400 border-purple-700/30"
-              : "bg-neutral-800 text-neutral-500 border-neutral-700/30"
+              ? "bg-[rgb(88_28_135/0.6)] text-purple-300 border-[rgb(126_34_206/0.4)]"
+              : "bg-neutral-800 text-neutral-500 border-neutral-700/50"
           )}>
             {isMaster ? "Mestre" : "Jogador"}
           </span>
@@ -207,7 +231,7 @@ export function CampaignDetailPage() {
                     <button
                       onClick={handleCopyInvite}
                       disabled={copying}
-                      className="flex-1 text-xs bg-violet-700 hover:bg-violet-600 text-white py-2 rounded-lg transition-colors disabled:opacity-50"
+                      className="flex-1 text-xs bg-purple-700 hover:bg-purple-600 text-white py-2 rounded-lg transition-colors disabled:opacity-50"
                     >
                       {copying ? "Gerando..." : "Gerar e copiar link"}
                     </button>
@@ -251,7 +275,7 @@ export function CampaignDetailPage() {
         {/* Scenes */}
         <section className="space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">Cenários</h2>
+            <h2 className="text-xs font-semibold text-neutral-400 uppercase tracking-widest">Cenários</h2>
             {isMaster && (
               <a href={EDITOR_URL} target="_blank" rel="noreferrer"
                 className="text-xs text-neutral-400 hover:text-neutral-200 border border-neutral-700/50 px-3 py-1.5 rounded-lg transition-colors">
@@ -282,7 +306,7 @@ export function CampaignDetailPage() {
 
         {/* Characters */}
         <section className="space-y-4">
-          <h2 className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">Personagens</h2>
+          <h2 className="text-xs font-semibold text-neutral-400 uppercase tracking-widest">Personagens</h2>
 
           {campaign.characters.length === 0 ? (
             <EmptyState text="Nenhum personagem na campanha ainda." />
@@ -302,9 +326,51 @@ export function CampaignDetailPage() {
             </div>
           )}
         </section>
+        {/* Solicitações de entrada sem convite */}
+        {isMaster && joinRequests.length > 0 && (
+          <section className="space-y-4">
+            <div className="flex items-center gap-2">
+              <h2 className="text-xs font-semibold text-neutral-400 uppercase tracking-widest">
+                Solicitações de entrada
+              </h2>
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-950/60 text-amber-400 border border-amber-700/40 font-medium">
+                {joinRequests.length}
+              </span>
+            </div>
+            <div className="space-y-2">
+              {joinRequests.map(req => (
+                <div key={req.id}
+                  className="flex items-center justify-between bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-3 hover:border-neutral-700/60 transition-colors">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-neutral-200 truncate">{req.player.name}</p>
+                      <p className="t-meta mt-0.5">{req.player.email}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      disabled={reviewing === req.id}
+                      onClick={() => handleReviewJoin(req.id, "approve")}
+                      className="text-xs text-green-400 hover:text-green-300 border border-green-900/40 hover:border-green-700/60 px-2.5 py-1 rounded-lg transition-colors disabled:opacity-50">
+                      Aprovar
+                    </button>
+                    <button
+                      disabled={reviewing === req.id}
+                      onClick={() => handleReviewJoin(req.id, "reject")}
+                      className="text-xs text-red-500 hover:text-red-400 border border-red-900/30 hover:border-red-700/50 px-2.5 py-1 rounded-lg transition-colors disabled:opacity-50">
+                      Rejeitar
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
         {/* Sessions */}
         <section className="space-y-4">
-          <h2 className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">Sessões anteriores</h2>
+          <h2 className="text-xs font-semibold text-neutral-400 uppercase tracking-widest">Sessões anteriores</h2>
 
           {pastSessions.length === 0 ? (
             <EmptyState text="Nenhuma sessão registrada ainda." />
@@ -334,7 +400,7 @@ export function CampaignDetailPage() {
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
     <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-4">
-      <p className="text-xs text-neutral-500 mb-1">{label}</p>
+      <p className="t-label mb-1">{label}</p>
       <p className="text-sm font-medium text-neutral-200">{value}</p>
     </div>
   )
@@ -378,16 +444,16 @@ function formatDuration(startedAt: string, endedAt?: string): string {
 }
 
 const LOG_TYPE_META: Record<string, { label: string; cls: string }> = {
-  JOIN:        { label: "entrada",    cls: "bg-neutral-800 text-neutral-400" },
-  LEAVE:       { label: "saída",      cls: "bg-neutral-800 text-neutral-400" },
-  CHAT:        { label: "chat",       cls: "bg-blue-950 text-blue-400" },
-  DICE:        { label: "dado",       cls: "bg-yellow-950 text-yellow-400" },
-  SCENE_LOAD:  { label: "cena",       cls: "bg-purple-950 text-purple-400" },
-  NPC_SPAWN:   { label: "npc+",       cls: "bg-orange-950 text-orange-400" },
-  NPC_DESPAWN: { label: "npc-",       cls: "bg-orange-950/60 text-orange-500" },
-  NOTE_REVEAL: { label: "nota",       cls: "bg-green-950 text-green-400" },
-  TRAP_DISARM: { label: "armadilha",  cls: "bg-red-950 text-red-400" },
-  FOG_CLEAR:   { label: "névoa",      cls: "bg-sky-950 text-sky-400" },
+  JOIN:        { label: "entrada",    cls: "bg-neutral-800/60 text-neutral-400 border-neutral-700/40" },
+  LEAVE:       { label: "saída",      cls: "bg-neutral-800/60 text-neutral-400 border-neutral-700/40" },
+  CHAT:        { label: "chat",       cls: "bg-blue-950/60 text-blue-400 border-blue-700/40" },
+  DICE:        { label: "dado",       cls: "bg-amber-950/60 text-amber-400 border-amber-700/40" },
+  SCENE_LOAD:  { label: "cena",       cls: "bg-[rgb(88_28_135/0.4)] text-purple-400 border-[rgb(126_34_206/0.4)]" },
+  NPC_SPAWN:   { label: "npc+",       cls: "bg-orange-950/60 text-orange-400 border-orange-700/40" },
+  NPC_DESPAWN: { label: "npc-",       cls: "bg-orange-950/40 text-orange-500 border-orange-700/30" },
+  NOTE_REVEAL: { label: "nota",       cls: "bg-green-950/60 text-green-400 border-green-700/40" },
+  TRAP_DISARM: { label: "armadilha",  cls: "bg-red-950/60 text-red-400 border-red-700/40" },
+  FOG_CLEAR:   { label: "névoa",      cls: "bg-sky-950/60 text-sky-400 border-sky-700/40" },
 }
 
 function formatLogDesc(log: ApiSessionLog): string {
@@ -443,7 +509,7 @@ function SessionRow({ session: s, campaignName, expanded, logs, loadingLog, onTo
             </p>
           </div>
           {!s.endedAt && (
-            <span className="text-xs px-2 py-0.5 bg-green-950 text-green-400 rounded border border-green-800/30">
+            <span className="text-[10px] px-2 py-0.5 rounded-full border font-medium bg-green-950/60 text-green-400 border-green-700/40">
               ao vivo
             </span>
           )}
@@ -477,7 +543,7 @@ function SessionRow({ session: s, campaignName, expanded, logs, loadingLog, onTo
                   return (
                     <div key={log.id} className="flex items-start gap-2 text-xs">
                       <span className="text-neutral-600 shrink-0 w-10">{t}</span>
-                      <span className={`shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium ${meta.cls}`}>
+                      <span className={`shrink-0 px-1.5 py-0.5 rounded-full border text-[10px] font-medium ${meta.cls}`}>
                         {meta.label}
                       </span>
                       {log.actorName && (
@@ -518,9 +584,17 @@ function CharacterRow({ character: c, isMaster, isOwn, campaignId, onApprove, on
             {c.name}
             {isOwn && <span className="ml-2 text-xs text-neutral-600">(você)</span>}
           </p>
-          <p className="text-xs text-neutral-500 mt-0.5">
-            {c.user.name} · {c.approved ? "aprovado" : "aguardando aprovação"}
-          </p>
+          <div className="flex items-center gap-2 mt-0.5">
+            <span className="t-meta">{c.user.name}</span>
+            <span className={clsx(
+              "text-[10px] px-1.5 py-0.5 rounded-full border font-medium",
+              c.approved
+                ? "bg-green-950/60 text-green-400 border-green-700/40"
+                : "bg-amber-950/60 text-amber-400 border-amber-700/40"
+            )}>
+              {c.approved ? "Aprovado" : "Pendente"}
+            </span>
+          </div>
         </div>
       </div>
 

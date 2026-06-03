@@ -259,6 +259,61 @@ export const EvVideoState = z.object({
   overlayBlend:       OverlayBlend.nullable(),
 })
 
+// ── COMBATE POR TURNO ────────────────────────────────────────────────────────
+
+export const CombatantSchema = z.object({
+  id:             z.string(),           // characterId (PC) ou tokenId (NPC/enemy)
+  name:           z.string(),
+  initiative:     z.number().int(),
+  hp:             z.number().int().nullable(),
+  maxHp:          z.number().int().nullable(),
+  isPlayer:       z.boolean(),
+  role:           z.enum(["npc", "enemy"]).nullable(),
+  avatarUrl:      z.string().nullable(),
+  hasAction:      z.boolean(),
+  hasBonusAction: z.boolean(),
+  hasMovement:    z.boolean(),
+  isDefeated:     z.boolean(),
+})
+export type CombatantEntry = z.infer<typeof CombatantSchema>
+
+/** S→C: estado completo do combate — enviado em broadcast e ao entrar na sala */
+export const EvCombatState = z.object({
+  active:     z.boolean(),
+  round:      z.number().int(),
+  turnIndex:  z.number().int(),
+  combatants: z.array(CombatantSchema),
+})
+
+/** C→S (mestre): inicia o combate — server rola iniciativa para todos os tokens */
+export const EvCombatStart = z.object({})
+
+/** C→S (mestre ou ator atual): encerra o turno atual e passa para o próximo */
+export const EvCombatNextTurn = z.object({})
+
+/** C→S (mestre): encerra o combate */
+export const EvCombatEnd = z.object({})
+
+/** C→S (mestre): ajusta HP de um combatente */
+export const EvCombatSetHp = z.object({
+  combatantId: z.string(),
+  hp:          z.number().int().min(0),
+})
+
+// ── FICHAS ───────────────────────────────────────────────────────────────────
+
+/** C→S: player updates their sheet during a session (HP, resources, etc.) */
+export const EvSheetUpdate = z.object({
+  characterId: z.string(),
+  patch:       z.record(z.string(), z.unknown()),
+})
+
+/** S→C: broadcast — current sheet state for a character */
+export const EvSheetState = z.object({
+  characterId: z.string(),
+  data:        z.record(z.string(), z.unknown()),
+})
+
 // ── FOG OF WAR ───────────────────────────────────────────────────────────────
 
 /** S→C: células de fog reveladas (delta, não o mapa inteiro) */
@@ -287,6 +342,8 @@ export const ServerToClientEvents = {
   "fog:revealed":        EvFogRevealed,
   "media:state":         EvMediaState,
   "video:state":         EvVideoState,
+  "sheet:state":         EvSheetState,
+  "combat:state":        EvCombatState,
 } as const
 
 export const ClientToServerEvents = {
@@ -308,6 +365,11 @@ export const ClientToServerEvents = {
   "video:play":      EvVideoPlay,
   "video:pause":     EvVideoPause,
   "video:stop":      EvVideoStop,
+  "sheet:update":        EvSheetUpdate,
+  "combat:start":        EvCombatStart,
+  "combat:next_turn":    EvCombatNextTurn,
+  "combat:end":          EvCombatEnd,
+  "combat:set_hp":       EvCombatSetHp,
 } as const
 
 export type EvMediaPlay         = z.infer<typeof EvMediaPlay>
@@ -320,9 +382,13 @@ export type EvVideoPlay         = z.infer<typeof EvVideoPlay>
 export type EvVideoPause        = z.infer<typeof EvVideoPause>
 export type EvVideoStop         = z.infer<typeof EvVideoStop>
 export type EvVideoState        = z.infer<typeof EvVideoState>
-export type VideoTransitionEffect = z.infer<typeof VideoTransitionEffect>
-export type VideoMode           = z.infer<typeof VideoMode>
-export type OverlayBlend        = z.infer<typeof OverlayBlend>
+export type EvCombatState       = z.infer<typeof EvCombatState>
+export type EvCombatStart       = z.infer<typeof EvCombatStart>
+export type EvCombatNextTurn    = z.infer<typeof EvCombatNextTurn>
+export type EvCombatEnd         = z.infer<typeof EvCombatEnd>
+export type EvCombatSetHp       = z.infer<typeof EvCombatSetHp>
+export type EvSheetUpdate       = z.infer<typeof EvSheetUpdate>
+export type EvSheetState        = z.infer<typeof EvSheetState>
 export type EvJoinRoom          = z.infer<typeof EvJoinRoom>
 export type EvRoomJoined        = z.infer<typeof EvRoomJoined>
 export type EvLoadScene         = z.infer<typeof EvLoadScene>

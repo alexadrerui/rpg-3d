@@ -4,6 +4,10 @@ import path   from "path"
 
 export default defineConfig({
   plugins: [react()],
+  define: {
+    global: 'globalThis',
+    'process': JSON.stringify({ env: { NODE_ENV: 'development' }, browser: true, version: 'v18.0.0' }),
+  },
   resolve: {
     alias: { "@": path.resolve(__dirname, "./src") },
     // Deduplicate react + three so Pascal viewer and game share the same instance

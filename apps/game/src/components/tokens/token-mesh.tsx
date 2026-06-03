@@ -69,7 +69,7 @@ export function TokenMesh({ token, name, role = "player", isOwn, isMaster, avata
 
     const intersect = new THREE.Vector3()
     raycaster.setFromCamera(
-      { x: (e.clientX / window.innerWidth) * 2 - 1, y: -(e.clientY / window.innerHeight) * 2 + 1 },
+      new THREE.Vector2((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1),
       camera
     )
     raycaster.ray.intersectPlane(dragPlane.current, intersect)

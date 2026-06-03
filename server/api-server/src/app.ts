@@ -8,6 +8,7 @@ import { assetRouter }                   from "./routes/assets.js"
 import { systemsRouter }                 from "./routes/systems.js"
 import { sessionLogRouter }              from "./routes/session-log.js"
 import { internalRouter }                from "./routes/internal.js"
+import { mastersRouter }                 from "./routes/masters.js"
 
 export function createApp(): express.Express {
   const app = express()
@@ -26,6 +27,7 @@ export function createApp(): express.Express {
   app.use("/systems",    systemsRouter)
   app.use("/sessions",   sessionLogRouter)
   app.use("/internal",   internalRouter)
+  app.use("/masters",    mastersRouter)
 
   app.get("/health", (_req, res) => res.json({ status: "ok", service: "api-server" }))
 

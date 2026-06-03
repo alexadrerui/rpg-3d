@@ -64,9 +64,13 @@ export function CharacterPage() {
     <div className="min-h-screen">
       {/* Header */}
       <header className="border-b border-neutral-800 px-6 py-4 flex items-center justify-between">
-        <button onClick={() => navigate("/")} className="text-xs text-neutral-500 hover:text-neutral-300">← Dashboard</button>
-        <div className="flex items-center gap-2">
-          <h1 className="text-sm font-medium text-neutral-300">{character.name}</h1>
+        <div className="flex items-center gap-3">
+          <button onClick={() => navigate(`/campaign/${campaignId}`)}
+            className="text-neutral-500 hover:text-neutral-300 text-xs transition-colors">
+            ← Campanha
+          </button>
+          <span className="text-neutral-700">/</span>
+          <h1 className="text-sm font-medium text-neutral-200">{character.name}</h1>
           <span className="text-xs text-neutral-600 border border-neutral-800 px-1.5 py-0.5 rounded-full">
             {system.name}
           </span>
@@ -74,7 +78,9 @@ export function CharacterPage() {
             ? <span className="text-xs bg-green-950/60 text-green-400 border border-green-700/40 px-2 py-0.5 rounded-full">Aprovado</span>
             : <span className="text-xs bg-amber-950/60 text-amber-400 border border-amber-700/40 px-2 py-0.5 rounded-full">Aguardando aprovação</span>}
         </div>
-        {saved && <span className="text-xs text-green-400">✓ Salvo</span>}
+        {saved
+          ? <span className="text-xs text-green-400">✓ Salvo</span>
+          : <div />}
       </header>
 
       {/* Sheet */}

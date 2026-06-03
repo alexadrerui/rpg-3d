@@ -101,6 +101,7 @@ export type ApiScene = {
 export type ApiCharacter = {
   id: string; name: string; campaignId: string; userId: string
   sheetData: Record<string, unknown>; approved: boolean
+  campaign?: { id: string; systemId: string }
   createdAt: string; updatedAt: string
 }
 export type ApiInvite = { token: string; expiresAt: string; url: string }
@@ -114,9 +115,9 @@ export type ApiSessionData = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const auth = {
-  register: (email: string, name: string, password: string) =>
+  register: (email: string, name: string, password: string, defaultRole: "master" | "player" = "player") =>
     apiFetch<{ token: string; refreshToken: string; user: ApiUser }>("/auth/register", {
-      method: "POST", body: JSON.stringify({ email, name, password }),
+      method: "POST", body: JSON.stringify({ email, name, password, defaultRole }),
     }),
 
   login: (email: string, password: string) =>

@@ -86,12 +86,13 @@ export function WallCutaway({ tokens }: Props) {
       obj.traverse(child => {
         if (!(child instanceof THREE.Mesh)) return
         if (child.name === "collision-mesh") return
+        const mesh = child as THREE.Mesh
 
         let mats: THREE.Material[]
-        if (Array.isArray(child.material)) {
-          mats = child.material
+        if (Array.isArray(mesh.material)) {
+          mats = mesh.material
         } else {
-          _singleMat.current[0] = child.material  // reutiliza array, evita alloc
+          _singleMat.current[0] = mesh.material  // reutiliza array, evita alloc
           mats = _singleMat.current
         }
         for (const mat of mats) {

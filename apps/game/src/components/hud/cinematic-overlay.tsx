@@ -74,7 +74,7 @@ export function CinematicOverlay({ videoState, onDimGame }: CinematicOverlayProp
       // Recompila só o fragment shader se o efeito mudou
       try {
         const { gl } = existing
-        const fsSrc = FRAGMENT_SHADERS[effect] ?? FRAGMENT_SHADERS.fade
+        const fsSrc = FRAGMENT_SHADERS[effect] ?? FRAGMENT_SHADERS.fade ?? ""
         const vs = compileShader(gl, gl.VERTEX_SHADER,   VERTEX_SHADER)
         const fs = compileShader(gl, gl.FRAGMENT_SHADER, fsSrc)
         const prog = createProgram(gl, vs, fs)
@@ -94,7 +94,7 @@ export function CinematicOverlay({ videoState, onDimGame }: CinematicOverlayProp
     if (!gl) { console.error("[cinematic] WebGL2 não disponível"); return null }
 
     try {
-      const fsSrc = FRAGMENT_SHADERS[effect] ?? FRAGMENT_SHADERS.fade
+      const fsSrc = FRAGMENT_SHADERS[effect] ?? FRAGMENT_SHADERS.fade ?? ""
       const vs   = compileShader(gl, gl.VERTEX_SHADER,   VERTEX_SHADER)
       const fs   = compileShader(gl, gl.FRAGMENT_SHADER, fsSrc)
       const prog = createProgram(gl, vs, fs)

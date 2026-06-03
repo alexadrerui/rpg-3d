@@ -14,10 +14,12 @@ export function LobbyPage() {
   const [step, setStep] = useState<"login" | "campaigns">(token ? "campaigns" : "login")
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-neutral-950 p-4">
+    <div className="min-h-screen flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-semibold text-neutral-100 tracking-tight">RPG 3D</h1>
+          <h1 className="text-3xl font-semibold text-neutral-100 tracking-tight">
+            RPG <span className="text-purple-300">3D</span>
+          </h1>
           <p className="text-neutral-500 text-sm mt-1">Mesa de RPG em tempo real</p>
         </div>
 
@@ -58,12 +60,13 @@ export function LobbyPage() {
 // ── Login form ────────────────────────────────────────────────────────────────
 
 function LoginForm({ onSuccess }: { onSuccess: (token: string, user: { id: string; name: string; email: string }) => void }) {
-  const [mode, setMode]     = useState<"login" | "register">("login")
-  const [email, setEmail]   = useState("")
-  const [name, setName]     = useState("")
-  const [password, setPass] = useState("")
-  const [error, setError]   = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [mode, setMode]         = useState<"login" | "register">("login")
+  const [email, setEmail]       = useState("")
+  const [name, setName]         = useState("")
+  const [password, setPass]     = useState("")
+  const [role, setRole]         = useState<"player" | "master">("player")
+  const [error, setError]       = useState<string | null>(null)
+  const [loading, setLoading]   = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -71,7 +74,7 @@ function LoginForm({ onSuccess }: { onSuccess: (token: string, user: { id: strin
     try {
       const { token, refreshToken, user } = mode === "login"
         ? await authApi.login(email, password)
-        : await authApi.register(email, name, password)
+        : await authApi.register(email, name, password, role)
       setRefreshToken(refreshToken)
       onSuccess(token, user)
     } catch (err: unknown) {
@@ -88,7 +91,7 @@ function LoginForm({ onSuccess }: { onSuccess: (token: string, user: { id: strin
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="flex rounded-lg border border-neutral-700/50 overflow-hidden mb-6">
         {(["login", "register"] as const).map(m => (
-          <button key={m} type="button" onClick={() => setMode(m)}
+          <button key={m} type="button" onClick={() => { setMode(m); setError(null) }}
             className={clsx("flex-1 py-2 text-sm transition-colors",
               mode === m ? "bg-neutral-800 text-neutral-100" : "text-neutral-500 hover:text-neutral-300")}>
             {m === "login" ? "Entrar" : "Criar conta"}
@@ -97,10 +100,39 @@ function LoginForm({ onSuccess }: { onSuccess: (token: string, user: { id: strin
       </div>
 
       {mode === "register" && (
-        <Field label="Nome">
-          <Input value={name} onChange={setName} placeholder="Seu nome" required />
-        </Field>
+        <>
+          <Field label="Nome">
+            <Input value={name} onChange={setName} placeholder="Seu nome" required />
+          </Field>
+
+          <div className="space-y-1">
+            <label className="t-label block">Você é</label>
+            <div className="grid grid-cols-2 gap-2">
+              {(["player", "master"] as const).map(r => (
+                <button
+                  key={r} type="button"
+                  onClick={() => setRole(r)}
+                  className={clsx(
+                    "flex flex-col items-center gap-1.5 px-3 py-3 rounded-lg border text-xs font-medium transition-all",
+                    role === r
+                      ? r === "master"
+                        ? "bg-[rgb(88_28_135/0.5)] text-purple-300 border-[rgb(126_34_206/0.5)]"
+                        : "bg-green-950/40 text-green-400 border-green-700/40"
+                      : "bg-neutral-800/60 text-neutral-500 border-neutral-700/50 hover:border-neutral-600 hover:text-neutral-300"
+                  )}
+                >
+                  <span className="text-lg leading-none">{r === "master" ? "👑" : "🎲"}</span>
+                  <span>{r === "master" ? "Mestre" : "Jogador"}</span>
+                  <span className={clsx("text-[10px] font-normal", role === r ? "opacity-80" : "text-neutral-600")}>
+                    {r === "master" ? "Cria campanhas" : "Participa de campanhas"}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </>
       )}
+
       <Field label="E-mail">
         <Input type="email" value={email} onChange={setEmail} placeholder="voce@email.com" required />
       </Field>
@@ -204,12 +236,14 @@ function CampaignSelector({ onEnter, onLogout }: {
                   {" · "}{c._count.characters} jogadores
                 </p>
               </div>
-              <span className={clsx("shrink-0 text-xs px-2 py-0.5 rounded-full",
+              <span className={clsx(
+                "shrink-0 text-[10px] px-2 py-0.5 rounded-full border font-medium",
                 c.isMaster
-                  ? "bg-purple-950/60 text-purple-400"
+                  ? "bg-[rgb(88_28_135/0.6)] text-purple-300 border-[rgb(126_34_206/0.4)]"
                   : c.myCharacter?.approved
-                  ? "bg-green-950/60 text-green-400"
-                  : "bg-amber-950/60 text-amber-400")}>
+                  ? "bg-green-950/60 text-green-400 border-green-700/40"
+                  : "bg-amber-950/60 text-amber-400 border-amber-700/40"
+              )}>
                 {c.isMaster ? "Mestre" : c.myCharacter?.approved ? "Aprovado" : "Pendente"}
               </span>
             </div>
@@ -227,7 +261,7 @@ function CampaignSelector({ onEnter, onLogout }: {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1">
-      <label className="text-xs text-neutral-500">{label}</label>
+      <label className="t-label block">{label}</label>
       {children}
     </div>
   )
@@ -238,7 +272,7 @@ function Input({ type = "text", value, onChange, placeholder, required }: {
   return (
     <input type={type} value={value} onChange={e => onChange(e.target.value)}
       placeholder={placeholder} required={required}
-      className="w-full bg-neutral-900 text-neutral-200 text-sm rounded-lg px-3 py-2 border border-neutral-700/50 outline-none focus:border-neutral-500 placeholder-neutral-700"
+      className="w-full bg-neutral-800 text-neutral-200 text-xs rounded-md px-2.5 py-1.5 border border-neutral-700/50 outline-none focus:border-neutral-500 placeholder-neutral-600"
     />
   )
 }

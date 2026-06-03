@@ -5,6 +5,7 @@ import type { EvMessageReceived, EvSendMessage, ChatChannel } from "@rpg3d/schem
 
 const MAX_MESSAGES = 200
 export type ChatMessage = EvMessageReceived
+export type { ChatChannel }
 
 export function useChat(serverUrl?: string) {
   const [messages, setMessages] = useState<ChatMessage[]>([])

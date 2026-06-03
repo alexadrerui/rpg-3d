@@ -1,0 +1,237 @@
+/* ════════════════════════════════════════════════════════════════════════════
+   RPG 3D — Design tokens
+   All CSS custom properties: color, type scale, spacing, radii.
+   Import once at the root of each app. Fonts are handled separately:
+     - Vite apps (game, dashboard): also import ./fonts.css
+     - Next.js editor: fonts loaded via next/font/local (no fonts.css needed)
+   ════════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* ── Font families ───────────────────────────────────────────────────── */
+  --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+               Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas,
+               "Liberation Mono", monospace;
+  --font-display: var(--font-sans);
+
+  /* ── Neutral scale (Tailwind neutral-*) ──────────────────────────────── */
+  --neutral-50:  #fafafa;
+  --neutral-100: #f5f5f5;
+  --neutral-200: #e5e5e5;
+  --neutral-300: #d4d4d4;
+  --neutral-400: #a3a3a3;
+  --neutral-500: #737373;
+  --neutral-600: #525252;
+  --neutral-700: #404040;
+  --neutral-800: #262626;
+  --neutral-900: #171717;
+  --neutral-950: #0a0a0a;
+
+  /* ── Background / surface stack ──────────────────────────────────────── */
+  --bg-canvas:    var(--neutral-950);  /* page / 3D scene background    */
+  --bg-game:      #0a0010;             /* game app's near-black violet  */
+  --bg-surface:   var(--neutral-900);  /* cards, panels, popovers       */
+  --bg-surface-2: var(--neutral-800);  /* nested rows, inputs           */
+  --bg-overlay:   rgb(23 23 23 / 0.9); /* glass panels (neutral-900/90) */
+  --bg-overlay-2: rgb(38 38 38 / 0.8); /* glass surface-2               */
+  --bg-tint:      rgb(0 0 0 / 0.4);    /* modal scrim                   */
+
+  /* ── Foreground / text ───────────────────────────────────────────────── */
+  --fg-1:     var(--neutral-100);  /* primary heading / strong copy   */
+  --fg-2:     var(--neutral-300);  /* body                            */
+  --fg-3:     var(--neutral-400);  /* secondary body / labels         */
+  --fg-muted: var(--neutral-500);  /* placeholders, hints             */
+  --fg-faint: var(--neutral-600);  /* timestamps, captions            */
+  --fg-ghost: var(--neutral-700);  /* disabled, dividers in copy      */
+
+  /* ── Borders / hairlines ─────────────────────────────────────────────── */
+  --border-strong: var(--neutral-700);
+  --border:        rgb(64 64 64 / 0.5);  /* neutral-700/50 — most common */
+  --border-soft:   rgb(38 38 38 / 1);    /* neutral-800                  */
+  --border-focus:  var(--neutral-500);
+  --divider:       rgb(64 64 64 / 0.5);
+
+  /* ── Brand accent — Mestre (Master / GM) ─────────────────────────────── */
+  --accent:       #7e22ce;              /* purple-700 — primary CTA / brand  */
+  --accent-hover: #9333ea;              /* purple-600 — hover                */
+  --accent-fg:    #ffffff;
+  --accent-tint:  rgb(88 28 135 / 0.6); /* purple-950/60 pill bg             */
+  --accent-soft:  rgb(88 28 135 / 0.3); /* purple-950/30                     */
+  --accent-ring:  rgb(126 34 206 / 0.4);/* purple-700/40 border              */
+  --accent-text:  #d8b4fe;              /* purple-300 — text on accent tint  */
+
+  /* ── Semantic colors (trigger types + state) ─────────────────────────── */
+  /* Notes — amber */
+  --note:      #f59e0b;              /* amber-500 */
+  --note-fg:   #fbbf24;              /* amber-400 */
+  --note-tint: rgb(120 53 15 / 0.8); /* amber-950/80 */
+  --note-ring: rgb(217 119 6 / 0.6); /* amber-600/60 */
+
+  /* Traps — red */
+  --danger:      #ef4444;              /* red-500 */
+  --danger-fg:   #f87171;              /* red-400 */
+  --danger-tint: rgb(127 29 29 / 0.4); /* red-950/40 */
+  --danger-ring: rgb(220 38 38 / 0.6); /* red-600/60 */
+
+  /* Spawn / success — green */
+  --success:      #22c55e;             /* green-500 */
+  --success-fg:   #4ade80;             /* green-400 */
+  --success-tint: rgb(20 83 45 / 0.6); /* green-950/60 */
+  --success-ring: rgb(21 128 61 / 0.4);/* green-700/40 */
+
+  /* Scene transitions / info — blue */
+  --info:      #3b82f6;              /* blue-500 */
+  --info-fg:   #60a5fa;              /* blue-400 */
+  --info-tint: rgb(23 37 84 / 0.3);  /* blue-950/30 */
+  --info-ring: rgb(37 99 235 / 0.6); /* blue-600/60 */
+
+  /* Ambient audio / whisper */
+  --audio:      #a855f7;          /* purple-500 */
+  --audio-fg:   #c084fc;          /* purple-400 */
+  --whisper-fg: var(--note-fg);   /* amber — same as notes */
+
+  /* Generic state aliases */
+  --warning:    var(--note);
+  --warning-fg: var(--note-fg);
+  --online:     var(--success);
+  --offline:    var(--neutral-600);
+
+  /* ── Dice color ramps (d4–d% buttons) ───────────────────────────────── */
+  --dice-d4:   linear-gradient(to bottom, #b91c1c, #7f1d1d);
+  --dice-d6:   linear-gradient(to bottom, #1d4ed8, #1e3a8a);
+  --dice-d8:   linear-gradient(to bottom, #15803d, #14532d);
+  --dice-d10:  linear-gradient(to bottom, #ca8a04, #854d0e);
+  --dice-d12:  linear-gradient(to bottom, #7e22ce, #581c87);
+  --dice-d20:  linear-gradient(to bottom, #db2777, #831843);
+  --dice-d100: linear-gradient(to bottom, #525252, #262626);
+
+  /* ── Type scale ──────────────────────────────────────────────────────── */
+  --text-xs:   0.75rem;   /* 12 — most UI labels, chat, badges */
+  --text-sm:   0.875rem;  /* 14 — buttons, headers, body in dense UIs */
+  --text-base: 1rem;      /* 16 — base */
+  --text-lg:   1.125rem;  /* 18 — section heads */
+  --text-xl:   1.25rem;   /* 20 */
+  --text-2xl:  1.5rem;    /* 24 — invite / lobby headings */
+  --text-3xl:  1.875rem;  /* 30 — brand wordmark */
+  --text-4xl:  2.25rem;
+
+  --leading-tight:   1.15;
+  --leading-snug:    1.3;
+  --leading-normal:  1.5;
+  --leading-relaxed: 1.625;
+
+  --tracking-tight:   -0.02em;  /* h1 (brand) */
+  --tracking-normal:  0;
+  --tracking-wide:    0.025em;
+  --tracking-widest:  0.15em;   /* tiny uppercase labels */
+
+  --weight-regular:  400;
+  --weight-medium:   500;
+  --weight-semibold: 600;
+  --weight-bold:     700;
+
+  /* ── Radii ───────────────────────────────────────────────────────────── */
+  --radius-xs:   2px;
+  --radius-sm:   4px;
+  --radius-md:   8px;     /* rounded-lg — chips, buttons, inputs */
+  --radius-lg:   12px;    /* rounded-xl — cards, panels          */
+  --radius-2xl:  16px;
+  --radius-full: 9999px;
+
+  /* ── Spacing scale (Tailwind units, reference only) ─────────────────── */
+  --space-0:   0;
+  --space-1:   4px;
+  --space-1_5: 6px;
+  --space-2:   8px;
+  --space-3:   12px;
+  --space-4:   16px;
+  --space-5:   20px;
+  --space-6:   24px;
+  --space-8:   32px;
+  --space-12:  48px;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   Semantic type roles — apply as utility classes on elements.
+   ════════════════════════════════════════════════════════════════════════════ */
+
+.t-brand {
+  font-family: var(--font-display);
+  font-size: var(--text-3xl);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-tight);
+  color: var(--fg-1);
+  line-height: var(--leading-tight);
+}
+
+.t-h1 {
+  font-family: var(--font-display);
+  font-size: var(--text-2xl);
+  font-weight: var(--weight-semibold);
+  color: var(--fg-1);
+  line-height: var(--leading-tight);
+}
+
+.t-h2 {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-medium);
+  color: var(--fg-2);
+  line-height: var(--leading-snug);
+}
+
+.t-h3 {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--fg-2);
+}
+
+.t-body {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  color: var(--fg-2);
+  line-height: var(--leading-normal);
+}
+
+.t-body-sm {
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  color: var(--fg-3);
+  line-height: var(--leading-relaxed);
+}
+
+/* Tiny UPPERCASE field/section labels */
+.t-label {
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--tracking-widest);
+  color: var(--fg-muted);
+  text-transform: uppercase;
+}
+
+.t-caption {
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  color: var(--fg-muted);
+}
+
+.t-meta {
+  font-family: var(--font-sans);
+  font-size: 10px;
+  color: var(--fg-faint);
+}
+
+.t-code {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--fg-2);
+}
+
+/* Dice totals, credits, counters */
+.t-num {
+  font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--weight-bold);
+}

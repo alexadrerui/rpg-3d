@@ -9,13 +9,15 @@ import { ParticipantsPanel }     from "../components/hud/participants-panel"
 import { MasterControls }        from "../components/hud/master-controls"
 import { TriggerNotifications, pushTriggerNotification } from "../components/hud/trigger-notifications"
 import { DiceOverlay } from "../components/dice/dice-overlay"
-import { CombatOverlay } from "../components/hud/combat-overlay"
-import { MediaPlayer }        from "../components/hud/media-player"
-import { VideoPlayer }        from "../components/hud/video-player"
-import { CinematicOverlay }   from "../components/hud/cinematic-overlay"
-import type { CombatAbility } from "../components/hud/combat-overlay"
-import { useSceneStore } from "../store/scene-store"
-import { characters } from "../lib/api-client"
+import { CombatOverlay }       from "../components/hud/combat-overlay"
+import { MediaPlayer }         from "../components/hud/media-player"
+import { VideoPlayer }         from "../components/hud/video-player"
+import { CinematicOverlay }    from "../components/hud/cinematic-overlay"
+import { CharacterSheetPanel } from "../components/hud/character-sheet-panel"
+import { CombatTracker }       from "../components/hud/combat-tracker"
+import type { CombatAbility }  from "../components/hud/combat-overlay"
+import { useSceneStore }  from "../store/scene-store"
+import { characters }     from "../lib/api-client"
 
 const SERVER_URL = (import.meta as unknown as Record<string,Record<string,string>>).env?.VITE_GAME_SERVER_URL ?? "http://localhost:4001"
 
@@ -59,20 +61,37 @@ export function SessionPage() {
   // ── Dim do jogo para modo cinematic ───────────────────────────────────────
   const [dimGame, setDimGame] = useState(false)
 
-  // ── Estado de combate ──────────────────────────────────────────────────────
-  const [combatMode,       setCombatMode]       = useState(false)
-  const [charAbilities,    setCharAbilities]    = useState<CombatAbility[]>([])
+  // ── Estado de combate e ficha ─────────────────────────────────────────────
+  const [combatMode,    setCombatMode]    = useState(false)
+  const [charAbilities, setCharAbilities] = useState<CombatAbility[]>([])
+  const [sheetPanelOpen, setSheetPanelOpen] = useState(false)
+  const [sheetData,     setSheetData]     = useState<Record<string, unknown>>({})
+  const [systemId,      setSystemId]      = useState("generic")
 
-  // Carrega habilidades do personagem ao entrar na sessão
+  // Carrega ficha + systemId do personagem ao entrar na sessão
   useEffect(() => {
     if (!auth.characterId) return
     characters.get(auth.characterId)
       .then(char => {
         const abs = char.sheetData?.combatAbilities as CombatAbility[] | undefined
         if (Array.isArray(abs)) setCharAbilities(abs)
+        setSheetData(char.sheetData ?? {})
+        if (char.campaign?.systemId) setSystemId(char.campaign.systemId)
       })
-      .catch(() => {/* ignora silenciosamente */})
+      .catch(() => {})
   }, [auth.characterId])
+
+  const handleSheetSave = async (patch: Record<string, unknown>) => {
+    if (!auth.characterId) return
+    const merged = { ...sheetData, ...patch }
+    await Promise.all([
+      characters.updateSheet(auth.characterId, merged),
+      room.updateSheet(auth.characterId, merged),
+    ])
+    setSheetData(merged)
+    const abs = merged.combatAbilities as CombatAbility[] | undefined
+    if (Array.isArray(abs)) setCharAbilities(abs)
+  }
 
   const ownToken = useMemo(
     () => Object.values(room.tokens).find(
@@ -118,21 +137,43 @@ export function SessionPage() {
       {/* ── HUD overlay ── */}
       <div className="absolute inset-0 pointer-events-none">
 
-        {/* TOP LEFT — status + master controls */}
-        <div className="absolute top-4 left-4 flex flex-col gap-3 pointer-events-auto">
+        {/* COMBAT TRACKER — faixa de iniciativa no topo (quando combate ativo) */}
+        {room.combatState?.active && (
+          <CombatTracker
+            combatState={room.combatState}
+            sheetStates={room.sheetStates}
+            isMaster={isMaster}
+            myCharacterId={auth.characterId}
+            onNextTurn={() => room.nextCombatTurn().catch(console.error)}
+            onEndCombat={() => room.endCombat().catch(console.error)}
+            onSetHp={(id, hp) => room.setCombatantHp(id, hp).catch(console.error)}
+          />
+        )}
+
+        {/* TOP LEFT — status + master controls (desloca quando combat tracker ativo) */}
+        <div
+          className="absolute left-4 flex flex-col gap-3 pointer-events-auto transition-all duration-200"
+          style={{ top: room.combatState?.active ? "56px" : "16px" }}
+        >
           <StatusBar status={room.status} sceneName={room.activeScene?.sceneId} />
           {isMaster && (
             <MasterControls
               activeScene={room.activeScene}
               campaignId={auth.campaignId}
+              isCombatActive={!!room.combatState?.active}
               onLoadScene={(id, fx) => room.loadScene({ sceneId: id, transitionFx: fx ?? "fade" })}
               onClearFog={room.clearFog}
+              onStartCombat={() => room.startCombat().catch(console.error)}
+              onEndCombat={() => room.endCombat().catch(console.error)}
             />
           )}
         </div>
 
-        {/* TOP RIGHT — participantes */}
-        <div className="absolute top-4 right-4 pointer-events-auto">
+        {/* TOP RIGHT — participantes (desloca quando combat tracker ativo) */}
+        <div
+          className="absolute right-4 pointer-events-auto transition-all duration-200"
+          style={{ top: room.combatState?.active ? "56px" : "16px" }}
+        >
           <ParticipantsPanel participants={room.participants} isMaster={isMaster} />
         </div>
 
@@ -167,16 +208,25 @@ export function SessionPage() {
           />
         )}
 
-        {/* Botão de entrar no modo combate — só para jogadores com token */}
-        {!combatMode && !isMaster && ownToken && (
-          <div className="absolute bottom-24 left-1/2 -translate-x-1/2 pointer-events-auto">
+        {/* Botões de ação do jogador — ficha + combate */}
+        {!isMaster && ownToken && (
+          <div className="absolute bottom-24 left-1/2 -translate-x-1/2 flex gap-2 pointer-events-auto">
             <button
-              onClick={() => setCombatMode(true)}
-              className="flex items-center gap-2 bg-neutral-950/85 hover:bg-neutral-900/90 text-neutral-400 hover:text-red-300 text-xs font-medium px-4 py-2 rounded-full border border-neutral-700/50 hover:border-red-900/60 transition-all backdrop-blur-sm shadow-lg"
+              onClick={() => setSheetPanelOpen(true)}
+              className="flex items-center gap-2 bg-neutral-950/85 hover:bg-neutral-900/90 text-neutral-400 hover:text-purple-300 text-xs font-medium px-4 py-2 rounded-full border border-neutral-700/50 hover:border-purple-900/60 transition-all backdrop-blur-sm shadow-lg"
             >
-              <span>⚔</span>
-              <span>Modo combate</span>
+              <span>📋</span>
+              <span>Ficha</span>
             </button>
+            {!combatMode && (
+              <button
+                onClick={() => setCombatMode(true)}
+                className="flex items-center gap-2 bg-neutral-950/85 hover:bg-neutral-900/90 text-neutral-400 hover:text-red-300 text-xs font-medium px-4 py-2 rounded-full border border-neutral-700/50 hover:border-red-900/60 transition-all backdrop-blur-sm shadow-lg"
+              >
+                <span>⚔</span>
+                <span>Modo combate</span>
+              </button>
+            )}
           </div>
         )}
 
@@ -234,6 +284,17 @@ export function SessionPage() {
         {/* Transition overlay (fade/dissolve) */}
         <SceneTransitionOverlay transitionFx={room.activeScene?.transitionFx} />
       </div>
+
+      {/* ── Ficha do personagem — painel lateral esquerdo ── */}
+      {!isMaster && auth.characterId && (
+        <CharacterSheetPanel
+          systemId={systemId}
+          sheetData={sheetData}
+          onSave={handleSheetSave}
+          open={sheetPanelOpen}
+          onClose={() => setSheetPanelOpen(false)}
+        />
+      )}
 
       {/* ── CinematicOverlay — fixed, z-index acima do game ── */}
       {(room.videoState?.mode === "cinematic" || room.videoState?.mode === "overlay") && (

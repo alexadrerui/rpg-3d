@@ -264,7 +264,7 @@ const STATUS_LABELS: Record<string, { label: string; class: string }> = {
 }
 
 function MySystemCard({ system: s }: { system: ApiGameSystem }) {
-  const badge = STATUS_LABELS[s.status] ?? STATUS_LABELS.PENDING
+  const badge: { label: string; class: string } = STATUS_LABELS[s.status] ?? { label: "Em revisão", class: "text-amber-400 border-amber-700/40 bg-amber-950/40" }
   return (
     <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-5 space-y-2">
       <div className="flex items-center justify-between gap-4">

@@ -613,6 +613,3 @@ function IntensityBar({ value, max, color }: { value: number; max: number; color
   )
 }
 
-function clsx(...classes: (string | boolean | undefined)[]) {
-  return classes.filter(Boolean).join(" ")
-}

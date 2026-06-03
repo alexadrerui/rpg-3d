@@ -47,10 +47,19 @@ campaignRouter.post("/", async (req, res) => {
   const parsed = CreateCampaignSchema.safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return }
 
+  const userId  = req.user!.sub
   const campaign = await prisma.campaign.create({
-    data: { ...parsed.data, masterId: req.user!.sub },
+    data:    { ...parsed.data, masterId: userId },
+    include: {
+      master:  { select: { id: true, name: true } },
+      _count:  { select: { characters: true, scenes: true } },
+    },
   })
-  res.status(201).json(campaign)
+  res.status(201).json({
+    ...campaign,
+    isMaster:    true,
+    myCharacter: null,
+  })
 })
 
 // ── GET /campaigns/:id ────────────────────────────────────────────────────────

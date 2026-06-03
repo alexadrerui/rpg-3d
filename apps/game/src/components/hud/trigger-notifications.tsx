@@ -93,9 +93,9 @@ function TriggerCard({ notif, isMaster, onDismiss }: { notif: Notif; isMaster: b
     "border-blue-600/60"
 
   const bgColor =
-    trigger.type === "trigger_trap"  ? "bg-red-950/80"    :
-    trigger.type === "trigger_note"  ? "bg-amber-950/80"  :
-    "bg-blue-950/80"
+    trigger.type === "trigger_trap"  ? "bg-red-900/70"    :
+    trigger.type === "trigger_note"  ? "bg-amber-900/70"  :
+    "bg-blue-950/70"
 
   return (
     <div className={clsx(

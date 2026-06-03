@@ -13,6 +13,8 @@ model User {
   name                String
   password            String
   credits             Int      @default(1000)
+  defaultRole         String   @default("player")  // "master" | "player" — preferência declarada no cadastro
+  masterCode          String?  @unique              // código público curto (ex: "XK7M2P") para jogadores encontrarem o mestre
   registrationIpHash  String?  // HMAC-SHA256 do IP de cadastro — LGPD art.12 (dado anonimizado)
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
@@ -24,6 +26,7 @@ model User {
   systemPurchases   UserSystemPurchase[]
   refreshTokens     RefreshToken[]
   submittedSystems  GameSystemCatalog[]  @relation("SystemAuthor")
+  joinRequests      JoinRequest[]
 }
 
 model Campaign {
@@ -35,13 +38,29 @@ model Campaign {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  master     User             @relation("CampaignMaster", fields: [masterId], references: [id])
-  scenes     Scene[]
-  characters Character[]
-  invites    CampaignInvite[]
-  sessions   Session[]
-  assets     Asset[]
-  logs       SessionLog[]
+  master       User             @relation("CampaignMaster", fields: [masterId], references: [id])
+  scenes       Scene[]
+  characters   Character[]
+  invites      CampaignInvite[]
+  sessions     Session[]
+  assets       Asset[]
+  logs         SessionLog[]
+  joinRequests JoinRequest[]
+}
+
+model JoinRequest {
+  id         String   @id @default(cuid())
+  campaignId String
+  playerId   String
+  status     String   @default("pending")  // "pending" | "approved" | "rejected"
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  player   User     @relation(fields: [playerId],   references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, playerId])
+  @@index([campaignId, status])
 }
 
 model Scene {

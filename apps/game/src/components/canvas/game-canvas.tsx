@@ -232,7 +232,7 @@ type TokenLayerProps = {
   participants:  Participant[]
   isMaster:      boolean
   userId:        string
-  characterId:   string
+  characterId:   string | undefined
   onTokenMove:   (id: string, pos: { x: number; y: number; z: number }, rotation: number) => void
   onNpcDespawn?: (tokenId: string) => void
   onNpcSpawn?:   (data: EvSpawnNpc) => void

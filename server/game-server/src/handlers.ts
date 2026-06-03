@@ -14,6 +14,9 @@ import {
   EvClearFog,
   EvMediaPlay,
   EvVideoPlay,
+  EvSheetUpdate,
+  EvCombatSetHp,
+  type CombatantEntry,
   type AnyTriggerNode,
 } from "@rpg3d/schema"
 import { rollDice }         from "@rpg3d/dice-engine"
@@ -190,6 +193,16 @@ export function registerHandlers(
     }
     if (room.video.url) {
       socket.emit("video:state", room.video)
+    }
+
+    // Restaura sheet states da sessão (HP/recursos atualizados durante a sessão)
+    for (const { characterId: charId, data } of sessions.getSheetStates(room)) {
+      socket.emit("sheet:state", { characterId: charId, data })
+    }
+
+    // Restaura estado de combate ativo
+    if (room.combat.active) {
+      socket.emit("combat:state", sessions.getCombatState(room))
     }
 
     console.log(`[room:join] ${user.name} → session ${sessionId} (master: ${isMaster})`)
@@ -700,6 +713,128 @@ export function registerHandlers(
 
     sessions.setVideo(room, { playing: false, url: null, name: null, mode: null, transitionIn: null, transitionOut: null, transitionDuration: null, overlayOpacity: null, overlayBlend: null })
     io.to(currentSessionId!).emit("video:state", room.video)
+    cb({ ok: true, data: undefined })
+  })
+
+  // ── combat:start ─────────────────────────────────────────────────────────
+
+  socket.on("combat:start", async (_raw, cb) => {
+    const room = currentSessionId ? sessions.get(currentSessionId) : null
+    if (!room) return cb({ ok: false, error: "NOT_IN_ROOM" })
+    if (!sessions.isMaster(room, user.sub)) return cb({ ok: false, error: "FORBIDDEN" })
+
+    const combatants: CombatantEntry[] = []
+
+    // Player tokens — rola iniciativa com mod de Destreza
+    for (const [charId, token] of room.tokens) {
+      const sheet   = room.sheetStates.get(charId) ?? {}
+      const dex     = typeof sheet.dexterity === "number" ? (sheet.dexterity as number) : 10
+      const dexMod  = Math.floor((dex - 10) / 2)
+      const { total: initiative } = rollDice(1, 20, dexMod)
+      const hp      = typeof sheet.hp === "number" ? (sheet.hp as number) : null
+      const maxHp   = typeof sheet.maxHp === "number" ? (sheet.maxHp as number) : null
+
+      const participant = room.participants.get(token.userId)
+      combatants.push({
+        id: charId, name: participant?.name ?? charId,
+        initiative, hp, maxHp,
+        isPlayer: true, role: null,
+        avatarUrl: participant?.avatarUrl ?? null,
+        hasAction: true, hasBonusAction: true, hasMovement: true,
+        isDefeated: false,
+      })
+    }
+
+    // NPC / enemy tokens — 1d20 puro
+    for (const [tokenId, npc] of room.npcTokens) {
+      const { total: initiative } = rollDice(1, 20, 0)
+      combatants.push({
+        id: tokenId, name: npc.name,
+        initiative, hp: null, maxHp: null,
+        isPlayer: false, role: npc.role,
+        avatarUrl: npc.avatarUrl ?? null,
+        hasAction: true, hasBonusAction: true, hasMovement: true,
+        isDefeated: false,
+      })
+    }
+
+    // Ordena por iniciativa decrescente; empate: nome alfabético
+    combatants.sort((a, b) => b.initiative - a.initiative || a.name.localeCompare(b.name))
+
+    sessions.startCombat(room, combatants)
+    io.to(currentSessionId!).emit("combat:state", sessions.getCombatState(room))
+
+    cb({ ok: true, data: undefined })
+    console.log(`[combat:start] ${combatants.length} combatentes na session ${currentSessionId}`)
+  })
+
+  // ── combat:next_turn ──────────────────────────────────────────────────────
+
+  socket.on("combat:next_turn", (_raw, cb) => {
+    const room = currentSessionId ? sessions.get(currentSessionId) : null
+    if (!room) return cb({ ok: false, error: "NOT_IN_ROOM" })
+    if (!room.combat.active) return cb({ ok: false, error: "NO_COMBAT" })
+
+    const isMaster        = sessions.isMaster(room, user.sub)
+    const currentCombatant = room.combat.combatants[room.combat.turnIndex]
+    const participant      = room.participants.get(user.sub)
+    const isCurrentActor   = !!participant?.characterId && participant.characterId === currentCombatant?.id
+
+    if (!isMaster && !isCurrentActor) return cb({ ok: false, error: "NOT_YOUR_TURN" })
+
+    sessions.nextTurn(room)
+    io.to(currentSessionId!).emit("combat:state", sessions.getCombatState(room))
+    cb({ ok: true, data: undefined })
+  })
+
+  // ── combat:end ────────────────────────────────────────────────────────────
+
+  socket.on("combat:end", (_raw, cb) => {
+    const room = currentSessionId ? sessions.get(currentSessionId) : null
+    if (!room) return cb({ ok: false, error: "NOT_IN_ROOM" })
+    if (!sessions.isMaster(room, user.sub)) return cb({ ok: false, error: "FORBIDDEN" })
+
+    sessions.endCombat(room)
+    io.to(currentSessionId!).emit("combat:state", sessions.getCombatState(room))
+    cb({ ok: true, data: undefined })
+    console.log(`[combat:end] session ${currentSessionId}`)
+  })
+
+  // ── combat:set_hp ─────────────────────────────────────────────────────────
+
+  socket.on("combat:set_hp", (raw, cb) => {
+    const parsed = EvCombatSetHp.safeParse(raw)
+    if (!parsed.success) return cb({ ok: false, error: "INVALID_PAYLOAD" })
+
+    const room = currentSessionId ? sessions.get(currentSessionId) : null
+    if (!room) return cb({ ok: false, error: "NOT_IN_ROOM" })
+    if (!sessions.isMaster(room, user.sub)) return cb({ ok: false, error: "FORBIDDEN" })
+
+    sessions.setCombatantHp(room, parsed.data.combatantId, parsed.data.hp)
+    io.to(currentSessionId!).emit("combat:state", sessions.getCombatState(room))
+    cb({ ok: true, data: undefined })
+  })
+
+  // ── sheet:update ──────────────────────────────────────────────────────────
+
+  socket.on("sheet:update", (raw, cb) => {
+    const parsed = EvSheetUpdate.safeParse(raw)
+    if (!parsed.success) return cb({ ok: false, error: "INVALID_PAYLOAD" })
+
+    const room = currentSessionId ? sessions.get(currentSessionId) : null
+    if (!room) return cb({ ok: false, error: "NOT_IN_ROOM" })
+
+    const { characterId, patch } = parsed.data
+    const participant = room.participants.get(user.sub)
+
+    // Only the character's owner or the master can update a sheet
+    if (participant?.characterId !== characterId && !sessions.isMaster(room, user.sub)) {
+      return cb({ ok: false, error: "FORBIDDEN" })
+    }
+
+    sessions.updateSheetState(room, characterId, patch)
+    io.to(currentSessionId!).emit("sheet:state", { characterId, data: patch })
+
     cb({ ok: true, data: undefined })
   })
 

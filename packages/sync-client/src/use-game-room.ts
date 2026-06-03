@@ -7,7 +7,11 @@ import type {
   EvMessageReceived, EvDiceResult, EvTriggerActivated,
   EvJoinRoom, EvLoadScene, EvSpawnNpc, EvDespawnNpc,
   EvMediaState, EvVideoState, EvVideoPlay,
+  EvCombatState, CombatantEntry,
 } from "@rpg3d/schema"
+
+export type { CombatantEntry }
+export type CombatState = EvCombatState
 
 // ── Estado Zustand ────────────────────────────────────────────────────────────
 export type GameRoomStatus = "disconnected" | "connecting" | "connected" | "error"
@@ -16,6 +20,8 @@ export type TokenPosition  = { characterId: string; userId: string; position: { 
 export type ActiveScene    = { sceneId: string; sceneUrl: string; transitionFx: "fade" | "dissolve" | "none" }
 export type FogCell        = { x: number; z: number }
 export type NpcToken       = EvNpcSpawned
+
+export type SheetStates = Record<string, Record<string, unknown>>
 
 export type MediaState = { playing: boolean; trackIndex: number; trackUrl: string | null; trackName: string | null }
 export type VideoState = {
@@ -36,27 +42,31 @@ type RoomStore = {
   tokens:    Record<string, TokenPosition>
   npcTokens: Record<string, NpcToken>
   activeScene: ActiveScene | null; fogCells: FogCell[]; lastError: string | null
-  mediaState: MediaState | null
-  videoState: VideoState | null
-  _setStatus:      (s: GameRoomStatus) => void
-  _setSession:     (d: EvRoomJoined) => void
-  _setParticipant: (p: Participant) => void
-  _setScene:       (s: ActiveScene) => void
-  _updateToken:    (t: EvTokenMoved) => void
-  _spawnNpc:       (n: NpcToken) => void
-  _moveNpc:        (tokenId: string, pos: NpcToken["position"], rotation: number) => void
-  _despawnNpc:     (tokenId: string) => void
-  _revealFog:      (c: FogCell[]) => void
-  _clearFog:       () => void
-  _setError:       (e: string | null) => void
-  _setMediaState:  (m: EvMediaState) => void
-  _setVideoState:  (v: EvVideoState) => void
+  mediaState:  MediaState | null
+  videoState:  VideoState | null
+  sheetStates:  SheetStates
+  combatState:  CombatState | null
+  _setStatus:       (s: GameRoomStatus) => void
+  _setSession:      (d: EvRoomJoined) => void
+  _setParticipant:  (p: Participant) => void
+  _setScene:        (s: ActiveScene) => void
+  _updateToken:     (t: EvTokenMoved) => void
+  _spawnNpc:        (n: NpcToken) => void
+  _moveNpc:         (tokenId: string, pos: NpcToken["position"], rotation: number) => void
+  _despawnNpc:      (tokenId: string) => void
+  _revealFog:       (c: FogCell[]) => void
+  _clearFog:        () => void
+  _setError:        (e: string | null) => void
+  _setMediaState:   (m: EvMediaState) => void
+  _setVideoState:   (v: EvVideoState) => void
+  _setSheetState:   (characterId: string, data: Record<string, unknown>) => void
+  _setCombatState:  (c: EvCombatState) => void
 }
 
 export const useRoomStore = create<RoomStore>((set) => ({
   status: "disconnected", sessionId: null,
   participants: [], tokens: {}, npcTokens: {}, activeScene: null, fogCells: [], lastError: null,
-  mediaState: null, videoState: null,
+  mediaState: null, videoState: null, sheetStates: {}, combatState: null,
 
   _setStatus:      (status)    => set({ status }),
   _setError:       (lastError) => set({ lastError }),
@@ -87,8 +97,11 @@ export const useRoomStore = create<RoomStore>((set) => ({
     return incoming.length ? { fogCells: [...s.fogCells, ...incoming] } : {}
   }),
   _clearFog: () => set({ fogCells: [] }),
-  _setMediaState: (m) => set({ mediaState: m }),
-  _setVideoState: (v) => set({ videoState: v }),
+  _setMediaState:  (m) => set({ mediaState: m }),
+  _setVideoState:  (v) => set({ videoState: v }),
+  _setSheetState:  (characterId, data) =>
+    set(s => ({ sheetStates: { ...s.sheetStates, [characterId]: data } })),
+  _setCombatState: (c) => set({ combatState: c }),
 }))
 
 // ── useGameRoom ───────────────────────────────────────────────────────────────
@@ -132,6 +145,8 @@ export function useGameRoom(opts: UseGameRoomOptions) {
     })
     socket.on("media:state",   (d) => store._setMediaState(d))
     socket.on("video:state",   (d) => store._setVideoState(d))
+    socket.on("sheet:state",   ({ characterId, data }) => store._setSheetState(characterId, data))
+    socket.on("combat:state",  (d) => store._setCombatState(d))
     socket.on("error",         ({ message }) => { store._setError(message); store._setStatus("error") })
     socket.on("connect_error", (err)         => { store._setError(err.message); store._setStatus("error") })
     socket.on("ping", () => socket.emit("pong"))
@@ -149,7 +164,7 @@ export function useGameRoom(opts: UseGameRoomOptions) {
         .off("token:moved").off("npc:spawned").off("npc:despawned")
         .off("chat:message").off("dice:result")
         .off("trigger:activated").off("fog:revealed")
-        .off("media:state").off("video:state")
+        .off("media:state").off("video:state").off("sheet:state").off("combat:state")
         .off("error").off("connect_error").off("ping")
     }
   }, [sessionId, campaignId, characterId, token, serverUrl, avatarType, avatarUrl])
@@ -208,13 +223,35 @@ export function useGameRoom(opts: UseGameRoomOptions) {
   const stopVideo  = useCallback(() =>
     new Promise<void>((res, rej) => getSocket(serverUrl).emit("video:stop", {}, r => r.ok ? res() : rej(new Error(r.error)))), [serverUrl])
 
+  const startCombat   = useCallback(() =>
+    new Promise<void>((res, rej) => getSocket(serverUrl).emit("combat:start", {}, r => r.ok ? res() : rej(new Error(r.error)))), [serverUrl])
+
+  const nextCombatTurn = useCallback(() =>
+    new Promise<void>((res, rej) => getSocket(serverUrl).emit("combat:next_turn", {}, r => r.ok ? res() : rej(new Error(r.error)))), [serverUrl])
+
+  const endCombat     = useCallback(() =>
+    new Promise<void>((res, rej) => getSocket(serverUrl).emit("combat:end", {}, r => r.ok ? res() : rej(new Error(r.error)))), [serverUrl])
+
+  const setCombatantHp = useCallback((combatantId: string, hp: number) =>
+    new Promise<void>((res, rej) => getSocket(serverUrl).emit("combat:set_hp", { combatantId, hp }, r => r.ok ? res() : rej(new Error(r.error)))), [serverUrl])
+
+  const updateSheet = useCallback((characterId: string, patch: Record<string, unknown>) =>
+    new Promise<void>((res, rej) => {
+      useRoomStore.getState()._setSheetState(characterId, patch)
+      getSocket(serverUrl).emit("sheet:update", { characterId, patch }, r =>
+        r.ok ? res() : rej(new Error(r.error))
+      )
+    }), [serverUrl])
+
   return {
     status: store.status, sessionId: store.sessionId,
     participants: store.participants, tokens: store.tokens, npcTokens: store.npcTokens,
     activeScene: store.activeScene, fogCells: store.fogCells, lastError: store.lastError,
     mediaState: store.mediaState, videoState: store.videoState,
+    sheetStates: store.sheetStates, combatState: store.combatState,
     loadScene, moveToken, revealNote, disarmTrap, clearFog, spawnNpc, despawnNpc,
     playMedia, pauseMedia, nextTrack, prevTrack, stopMedia,
     playVideo, pauseVideo, stopVideo,
+    updateSheet, startCombat, nextCombatTurn, endCombat, setCombatantHp,
   }
 }

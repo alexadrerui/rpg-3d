@@ -5,13 +5,16 @@ import type { ActiveScene }    from "@rpg3d/sync-client"
 import type { ApiScene }       from "../../lib/api-client"
 
 type Props = {
-  activeScene:  ActiveScene | null
-  campaignId:   string
-  onLoadScene:  (sceneId: string, fx?: "fade" | "dissolve" | "none") => Promise<void>
-  onClearFog:   () => Promise<void>
+  activeScene:    ActiveScene | null
+  campaignId:     string
+  isCombatActive: boolean
+  onLoadScene:    (sceneId: string, fx?: "fade" | "dissolve" | "none") => Promise<void>
+  onClearFog:     () => Promise<void>
+  onStartCombat:  () => Promise<void>
+  onEndCombat:    () => Promise<void>
 }
 
-export function MasterControls({ activeScene, campaignId, onLoadScene, onClearFog }: Props) {
+export function MasterControls({ activeScene, campaignId, isCombatActive, onLoadScene, onClearFog, onStartCombat, onEndCombat }: Props) {
   const [open, setOpen]         = useState(false)
   const [loading, setLoading]   = useState(false)
   const [sceneList, setSceneList] = useState<ApiScene[]>([])
@@ -105,6 +108,25 @@ export function MasterControls({ activeScene, campaignId, onLoadScene, onClearFo
           ↺ Atualizar lista
         </button>
       )}
+
+      {/* Combat controls */}
+      <div className="border-t border-neutral-800/60 pt-2 mt-1">
+        {isCombatActive ? (
+          <button
+            onClick={onEndCombat}
+            className="w-full text-xs text-red-400/80 hover:text-red-300 bg-red-950/30 hover:bg-red-950/50 px-3 py-1.5 rounded-lg border border-red-900/40 hover:border-red-800/60 transition-colors text-left"
+          >
+            ✕ Encerrar combate
+          </button>
+        ) : (
+          <button
+            onClick={onStartCombat}
+            className="w-full text-xs text-amber-400/80 hover:text-amber-300 bg-amber-950/30 hover:bg-amber-950/50 px-3 py-1.5 rounded-lg border border-amber-900/40 hover:border-amber-800/60 transition-colors text-left"
+          >
+            ⚔ Iniciar combate
+          </button>
+        )}
+      </div>
     </div>
   )
 }

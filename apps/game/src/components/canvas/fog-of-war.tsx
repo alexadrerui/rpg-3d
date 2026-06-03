@@ -8,7 +8,8 @@ import {
   uv, float, int, uint, vec4, vec2, ivec2,
   select, min as tslMin,
 } from "three/tsl"
-import type { FogCell, FogOfWarConfig } from "@rpg3d/schema"
+import type { FogOfWarConfig } from "@rpg3d/schema"
+import type { FogCell } from "@rpg3d/sync-client"
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Fog of War — WebGPU path usa compute shader + StorageTexture;

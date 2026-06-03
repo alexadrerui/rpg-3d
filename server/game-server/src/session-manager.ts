@@ -1,5 +1,5 @@
 import type { Redis } from "ioredis"
-import type { EvRoomJoined, EvTokenMoved } from "@rpg3d/schema"
+import type { EvRoomJoined, EvTokenMoved, CombatantEntry, EvCombatState, VideoMode, VideoTransitionEffect, OverlayBlend } from "@rpg3d/schema"
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tipos internos do estado de uma room
@@ -33,6 +33,15 @@ export type NpcTokenState = {
   avatarUrl?:  string
 }
 
+export type { CombatantEntry }
+
+export type CombatState = {
+  active:     boolean
+  round:      number
+  turnIndex:  number
+  combatants: CombatantEntry[]
+}
+
 export type MediaState = {
   playing:    boolean
   trackIndex: number
@@ -44,12 +53,12 @@ export type VideoState = {
   playing:            boolean
   url:                string | null
   name:               string | null
-  mode:               string | null
-  transitionIn:       string | null
-  transitionOut:      string | null
+  mode:               VideoMode | null
+  transitionIn:       VideoTransitionEffect | null
+  transitionOut:      VideoTransitionEffect | null
   transitionDuration: number | null
   overlayOpacity:     number | null
-  overlayBlend:       string | null
+  overlayBlend:       OverlayBlend | null
 }
 
 export type RoomState = {
@@ -58,12 +67,14 @@ export type RoomState = {
   masterId:       string
   activeSceneId:  string | null
   activeSceneUrl: string | null
-  participants:   Map<string, Participant>     // userId → Participant
-  tokens:         Map<string, TokenState>     // characterId → TokenState
-  npcTokens:      Map<string, NpcTokenState>  // tokenId → NpcTokenState
+  participants:   Map<string, Participant>                    // userId → Participant
+  tokens:         Map<string, TokenState>                    // characterId → TokenState
+  npcTokens:      Map<string, NpcTokenState>                 // tokenId → NpcTokenState
+  sheetStates:    Map<string, Record<string, unknown>>       // characterId → last sheet patch (ephemeral, not persisted)
+  combat:         CombatState
   disarmedTraps:  Set<string>
   revealedNotes:  Set<string>
-  fogCells:       Set<string>                 // "x:z" serializado
+  fogCells:       Set<string>                                // "x:z" serializado
   media:          MediaState
   video:          VideoState
   lastActivity:   number
@@ -104,6 +115,8 @@ export class SessionManager {
       participants:   new Map(),
       tokens:         new Map(),
       npcTokens:      new Map(),
+      sheetStates:    new Map(),
+      combat:         { active: false, round: 1, turnIndex: 0, combatants: [] },
       disarmedTraps:  new Set(),
       revealedNotes:  new Set(),
       fogCells:       new Set(),
@@ -226,6 +239,72 @@ export class SessionManager {
     return Array.from(room.npcTokens.values())
   }
 
+  // ── Sheet states (ephemeral, not persisted to Redis) ─────────────────────
+
+  updateSheetState(room: RoomState, characterId: string, data: Record<string, unknown>): void {
+    room.sheetStates.set(characterId, data)
+    this.touch(room)
+  }
+
+  getSheetStates(room: RoomState): Array<{ characterId: string; data: Record<string, unknown> }> {
+    return Array.from(room.sheetStates.entries()).map(([characterId, data]) => ({ characterId, data }))
+  }
+
+  // ── Combate por turno ────────────────────────────────────────────────────
+
+  startCombat(room: RoomState, combatants: CombatantEntry[]): void {
+    room.combat = { active: true, round: 1, turnIndex: 0, combatants }
+    this.touch(room)
+    this.persist(room)
+  }
+
+  nextTurn(room: RoomState): void {
+    const c = room.combat
+    if (!c.active || c.combatants.length === 0) return
+    const total = c.combatants.length
+    let next = c.turnIndex
+    let safetyBreak = 0
+    do {
+      next++
+      if (next >= total) { next = 0; c.round++ }
+      safetyBreak++
+    } while (c.combatants[next]?.isDefeated && safetyBreak <= total)
+
+    c.turnIndex = next
+    const actor = c.combatants[next]
+    if (actor && !actor.isDefeated) {
+      actor.hasAction = true
+      actor.hasBonusAction = true
+      actor.hasMovement = true
+    }
+    this.touch(room)
+    this.persist(room)
+  }
+
+  endCombat(room: RoomState): void {
+    room.combat = { active: false, round: 1, turnIndex: 0, combatants: [] }
+    this.touch(room)
+    this.persist(room)
+  }
+
+  setCombatantHp(room: RoomState, id: string, hp: number): void {
+    const combatant = room.combat.combatants.find(c => c.id === id)
+    if (!combatant) return
+    combatant.hp = Math.max(0, hp)
+    combatant.isDefeated = combatant.hp <= 0
+    this.touch(room)
+    this.persist(room)
+  }
+
+  getCombatState(room: RoomState): EvCombatState {
+    return {
+      active:     room.combat.active,
+      round:      room.combat.round,
+      turnIndex:  room.combat.turnIndex,
+      combatants: room.combat.combatants,
+    }
+  }
+
   // ── Mídia ─────────────────────────────────────────────────────────────────
 
   setMedia(room: RoomState, state: Partial<MediaState>): void {
@@ -291,6 +370,7 @@ export class SessionManager {
         participants:   Array.from(room.participants.entries()).map(([, p]) => p),
         media:          room.media,
         video:          room.video,
+        combat:         room.combat,
         lastActivity:   room.lastActivity,
       }
       await this.redis.setex(
@@ -319,6 +399,8 @@ export class SessionManager {
         participants:   new Map((d.participants as Participant[]).map(p => [p.userId, p])),
         tokens:         new Map(),
         npcTokens:      new Map((d.npcTokens as NpcTokenState[] ?? []).map(n => [n.tokenId, n])),
+        sheetStates:    new Map(),
+        combat:         d.combat ?? { active: false, round: 1, turnIndex: 0, combatants: [] },
         disarmedTraps:  new Set(d.disarmedTraps),
         revealedNotes:  new Set(d.revealedNotes),
         fogCells:       new Set(d.fogCells),

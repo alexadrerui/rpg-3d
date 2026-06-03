@@ -29,6 +29,13 @@ import type {
   EvVideoPause,
   EvVideoStop,
   EvVideoState,
+  EvSheetUpdate,
+  EvSheetState,
+  EvCombatState,
+  EvCombatStart,
+  EvCombatNextTurn,
+  EvCombatEnd,
+  EvCombatSetHp,
 } from "./events.js"
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -48,6 +55,8 @@ export interface ServerToClientMap {
   "fog:revealed":      (data: EvFogRevealed)       => void
   "media:state":       (data: EvMediaState)        => void
   "video:state":       (data: EvVideoState)        => void
+  "sheet:state":       (data: EvSheetState)        => void
+  "combat:state":      (data: EvCombatState)       => void
   "error":             (data: { code: string; message: string }) => void
   "ping":              () => void
 }
@@ -68,10 +77,15 @@ export interface ClientToServerMap {
   "media:next":   (data: EvMediaNext,  cb: AckFn) => void
   "media:prev":   (data: EvMediaPrev,  cb: AckFn) => void
   "media:stop":   (data: EvMediaStop,  cb: AckFn) => void
-  "video:play":   (data: EvVideoPlay,  cb: AckFn) => void
-  "video:pause":  (data: EvVideoPause, cb: AckFn) => void
-  "video:stop":   (data: EvVideoStop,  cb: AckFn) => void
-  "pong":         () => void
+  "video:play":   (data: EvVideoPlay,   cb: AckFn) => void
+  "video:pause":  (data: EvVideoPause,  cb: AckFn) => void
+  "video:stop":   (data: EvVideoStop,   cb: AckFn) => void
+  "sheet:update":     (data: EvSheetUpdate,     cb: AckFn) => void
+  "combat:start":     (data: EvCombatStart,     cb: AckFn) => void
+  "combat:next_turn": (data: EvCombatNextTurn,  cb: AckFn) => void
+  "combat:end":       (data: EvCombatEnd,       cb: AckFn) => void
+  "combat:set_hp":    (data: EvCombatSetHp,     cb: AckFn) => void
+  "pong":             () => void
 }
 
 export type AckFn<T = void> = (res: AckResponse<T>) => void

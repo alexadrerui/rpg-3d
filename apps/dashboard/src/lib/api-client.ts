@@ -85,7 +85,18 @@ async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
 // Tipos
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type ApiUser = { id: string; name: string; email: string }
+export type ApiUser = { id: string; name: string; email: string; masterCode?: string; defaultRole?: string }
+
+export type ApiMasterProfile = {
+  id: string; name: string; masterCode: string
+  ownedCampaigns: { id: string; name: string; systemId: string; _count: { characters: number } }[]
+}
+
+export type ApiJoinRequest = {
+  id: string; campaignId: string; playerId: string; status: string; createdAt: string
+  player:   { id: string; name: string; email: string }
+  campaign: { id: string; name: string }
+}
 export type ApiCampaign = {
   id: string; name: string; description?: string
   systemId: string; masterId: string; isMaster: boolean
@@ -114,9 +125,9 @@ export type ApiSessionData = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const auth = {
-  register: (email: string, name: string, password: string) =>
+  register: (email: string, name: string, password: string, defaultRole: "master" | "player" = "player") =>
     apiFetch<{ token: string; refreshToken: string; user: ApiUser }>("/auth/register", {
-      method: "POST", body: JSON.stringify({ email, name, password }),
+      method: "POST", body: JSON.stringify({ email, name, password, defaultRole }),
     }),
 
   login: (email: string, password: string) =>
@@ -280,4 +291,27 @@ export const gameSystems = {
 
   purchase: (systemId: string) =>
     apiFetch<{ ok: boolean; credits: number }>(`/systems/${systemId}/purchase`, { method: "POST" }),
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Masters — encontrar mestre por código + solicitações de entrada
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const masters = {
+  findByCode: (code: string) =>
+    apiFetch<ApiMasterProfile>(`/masters/${code.toUpperCase()}`),
+
+  requestJoin: (code: string, campaignId: string) =>
+    apiFetch<ApiJoinRequest>(
+      `/masters/${code.toUpperCase()}/campaigns/${campaignId}/request`,
+      { method: "POST" }
+    ),
+
+  listRequests: () =>
+    apiFetch<ApiJoinRequest[]>("/masters/me/requests"),
+
+  reviewRequest: (requestId: string, action: "approve" | "reject") =>
+    apiFetch<{ ok: boolean; action: string }>(`/masters/requests/${requestId}`, {
+      method: "PATCH", body: JSON.stringify({ action }),
+    }),
 }
