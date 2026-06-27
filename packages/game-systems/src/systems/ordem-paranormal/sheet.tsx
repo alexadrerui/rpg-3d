@@ -1,22 +1,24 @@
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { clsx } from "clsx"
 import type { CharacterSheetProps, CombatAbility } from "../../types.js"
 import {
   ATRIBUTOS, PERICIAS, TREINO, CLASSE_LIST, ORIGEM_LIST, ORIGENS, CLASSES,
   pvMax, peMax, sanMax, dtPadrao, periciasConcedidas, type AttrKey,
 } from "./data.js"
+import { RITUAIS, ELEMENTOS } from "./rituais.js"
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Ordem Paranormal — ficha de agente em abas
 // ─────────────────────────────────────────────────────────────────────────────
 
-type Step = "basico" | "atributos" | "pericias" | "habilidades"
+type Step = "basico" | "atributos" | "pericias" | "habilidades" | "rituais"
 
 const STEPS: { key: Step; label: string; icon: string }[] = [
   { key: "basico",      label: "Agente",      icon: "🕵️" },
   { key: "atributos",   label: "Atributos",   icon: "🎲" },
   { key: "pericias",    label: "Perícias",    icon: "📋" },
   { key: "habilidades", label: "Habilidades", icon: "✦" },
+  { key: "rituais",     label: "Rituais",     icon: "◈"  },
 ]
 
 export function OrdemParanormalCharacterSheet({ data, onSave, saving, readOnly }: CharacterSheetProps) {
@@ -48,7 +50,8 @@ export function OrdemParanormalCharacterSheet({ data, onSave, saving, readOnly }
         {step === "basico"      && <BasicoStep      sheet={data} onSave={onSave} saving={saving} readOnly={readOnly} onNext={() => setStep("atributos")} />}
         {step === "atributos"   && <AtributosStep   sheet={data} onSave={onSave} saving={saving} readOnly={readOnly} onNext={() => setStep("pericias")} onBack={() => setStep("basico")} />}
         {step === "pericias"    && <PericiasStep    sheet={data} onSave={onSave} saving={saving} readOnly={readOnly} onNext={() => setStep("habilidades")} onBack={() => setStep("atributos")} />}
-        {step === "habilidades" && <HabilidadesStep sheet={data} onSave={onSave} saving={saving} readOnly={readOnly} onBack={() => setStep("pericias")} />}
+        {step === "habilidades" && <HabilidadesStep sheet={data} onSave={onSave} saving={saving} readOnly={readOnly} onNext={() => setStep("rituais")} onBack={() => setStep("pericias")} />}
+        {step === "rituais"     && <RituaisStep     sheet={data} onSave={onSave} saving={saving} readOnly={readOnly} onBack={() => setStep("habilidades")} />}
       </div>
     </div>
   )
@@ -326,7 +329,7 @@ function PericiasStep({ sheet, onSave, saving, readOnly, onNext, onBack }: StepP
 
 const ORDEM_RESOURCES = ["PE", "Ação", "Bônus", "Reação", "Gratuito"]
 
-function HabilidadesStep({ sheet, onSave, saving, readOnly, onBack }: StepProps & { onBack: () => void }) {
+function HabilidadesStep({ sheet, onSave, saving, readOnly, onBack, onNext }: StepProps & { onBack: () => void; onNext?: () => void }) {
   const [abilities, setAbilities] = useState<CombatAbility[]>(
     () => (sheet.combatAbilities as CombatAbility[] | undefined) ?? [],
   )
@@ -437,7 +440,248 @@ function HabilidadesStep({ sheet, onSave, saving, readOnly, onBack }: StepProps 
         ))}
       </div>
 
-      {!readOnly && <StepFooter saving={saving} onSave={save} onBack={onBack} finalStep />}
+      {!readOnly && <StepFooter saving={saving} onSave={save} onBack={onBack} onNext={onNext} />}
+    </div>
+  )
+}
+
+// ── Etapa 5: Rituais ──────────────────────────────────────────────────────────
+
+const CIRCULO_LABEL: Record<number, string> = { 1: "1º", 2: "2º", 3: "3º", 4: "4º" }
+const CIRCULO_COLOR: Record<number, string> = {
+  1: "border-emerald-700/60 text-emerald-400",
+  2: "border-blue-700/60 text-blue-400",
+  3: "border-purple-700/60 text-purple-400",
+  4: "border-red-700/60 text-red-400",
+}
+const CIRCULO_BG: Record<number, string> = {
+  1: "bg-emerald-900/20",
+  2: "bg-blue-900/20",
+  3: "bg-purple-900/20",
+  4: "bg-red-900/20",
+}
+
+function maxCirculo(nex: number): number {
+  return 1 + (nex >= 25 ? 1 : 0) + (nex >= 55 ? 1 : 0) + (nex >= 85 ? 1 : 0)
+}
+
+function RituaisStep({ sheet, onSave, saving, readOnly, onBack }: StepProps & { onBack: () => void }) {
+  const nex = typeof sheet.nex === "number" ? sheet.nex : 5
+  const maxCirc = maxCirculo(nex)
+
+  const [conhecidos, setConhecidos] = useState<string[]>(
+    () => (sheet.rituaisConhecidos as string[] | undefined) ?? [],
+  )
+  const [filterCirculo, setFilterCirculo] = useState<number | null>(null)
+  const [filterElemento, setFilterElemento] = useState<string>("")
+  const [filterConhecido, setFilterConhecido] = useState(false)
+  const [expandido, setExpandido] = useState<string | null>(null)
+
+  const rituaisFiltrados = useMemo(() => {
+    return RITUAIS.filter(r => {
+      if (filterCirculo !== null && r.circulo !== filterCirculo) return false
+      if (filterElemento && !r.elementos.includes(filterElemento)) return false
+      if (filterConhecido && !conhecidos.includes(r.nome)) return false
+      return true
+    })
+  }, [filterCirculo, filterElemento, filterConhecido, conhecidos])
+
+  const toggle = (nome: string) => {
+    setConhecidos(prev =>
+      prev.includes(nome) ? prev.filter(n => n !== nome) : [...prev, nome],
+    )
+  }
+
+  const save = () => onSave({ rituaisConhecidos: conhecidos })
+
+  return (
+    <div className="space-y-4">
+      {/* Cabeçalho */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-medium text-neutral-200">Catálogo de rituais</h2>
+          <p className="text-xs text-neutral-500 mt-0.5">
+            NEX {nex}% — círculo máximo: {maxCirc}º ·{" "}
+            <span className="text-red-400">{conhecidos.length}</span> conhecidos de {RITUAIS.length}
+          </p>
+        </div>
+        {!readOnly && (
+          <button onClick={save} disabled={saving}
+            className="text-xs bg-red-900/60 hover:bg-red-800/60 text-red-300 px-3 py-1.5 rounded-lg border border-red-700/40 transition-colors disabled:opacity-50">
+            {saving ? "Salvando..." : "Salvar"}
+          </button>
+        )}
+      </div>
+
+      {/* Filtros */}
+      <div className="flex flex-wrap gap-2">
+        {/* Círculo */}
+        <div className="flex gap-1">
+          {([null, 1, 2, 3, 4] as (number | null)[]).map(c => (
+            <button key={String(c)} onClick={() => setFilterCirculo(c === filterCirculo ? null : c)}
+              className={clsx(
+                "px-2.5 py-1 text-xs rounded-lg border transition-colors",
+                filterCirculo === c
+                  ? "border-red-600 bg-red-900/40 text-red-300"
+                  : "border-neutral-700/50 text-neutral-500 hover:text-neutral-300",
+                c !== null && c > maxCirc ? "opacity-40" : "",
+              )}>
+              {c === null ? "Todos" : `${CIRCULO_LABEL[c]} círculo`}
+            </button>
+          ))}
+        </div>
+
+        {/* Elemento */}
+        <select value={filterElemento} onChange={e => setFilterElemento(e.target.value)}
+          className="bg-neutral-900 text-neutral-300 text-xs rounded-lg px-2 py-1 border border-neutral-700/50 outline-none focus:border-neutral-500">
+          <option value="">Todos os elementos</option>
+          {ELEMENTOS.map(el => <option key={el} value={el}>{el}</option>)}
+        </select>
+
+        {/* Só conhecidos */}
+        <button onClick={() => setFilterConhecido(v => !v)}
+          className={clsx(
+            "px-2.5 py-1 text-xs rounded-lg border transition-colors",
+            filterConhecido
+              ? "border-emerald-600 bg-emerald-900/30 text-emerald-300"
+              : "border-neutral-700/50 text-neutral-500 hover:text-neutral-300",
+          )}>
+          Conhecidos
+        </button>
+      </div>
+
+      {/* Lista */}
+      <div className="space-y-1.5 max-h-[520px] overflow-y-auto pr-1">
+        {rituaisFiltrados.length === 0 && (
+          <p className="py-8 text-center text-neutral-600 text-sm">Nenhum ritual encontrado.</p>
+        )}
+        {rituaisFiltrados.map(ritual => {
+          const bloqueado = ritual.circulo > maxCirc
+          const conhecido = conhecidos.includes(ritual.nome)
+          const aberto = expandido === ritual.nome
+
+          return (
+            <div key={ritual.nome}
+              className={clsx(
+                "rounded-xl border transition-all",
+                CIRCULO_BG[ritual.circulo],
+                aberto ? "border-neutral-600" : "border-neutral-800",
+                bloqueado ? "opacity-50" : "",
+              )}>
+              {/* Linha principal */}
+              <div className="flex items-center gap-3 px-3 py-2.5">
+                {/* Checkbox conhecido */}
+                {!readOnly && (
+                  <button onClick={() => toggle(ritual.nome)}
+                    className={clsx(
+                      "w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center text-[9px] transition-colors",
+                      conhecido
+                        ? "border-emerald-500 bg-emerald-900/60 text-emerald-300"
+                        : "border-neutral-600 text-transparent hover:border-neutral-400",
+                    )}>
+                    ✓
+                  </button>
+                )}
+
+                {/* Círculo badge */}
+                <span className={clsx(
+                  "text-[10px] font-bold px-1.5 py-0.5 rounded border flex-shrink-0",
+                  CIRCULO_COLOR[ritual.circulo],
+                )}>
+                  {CIRCULO_LABEL[ritual.circulo]}
+                </span>
+
+                {/* Nome */}
+                <button onClick={() => setExpandido(aberto ? null : ritual.nome)}
+                  className="flex-1 text-left text-sm text-neutral-200 hover:text-white transition-colors font-medium">
+                  {ritual.nome}
+                </button>
+
+                {/* Elementos */}
+                <div className="hidden sm:flex gap-1 flex-shrink-0">
+                  {ritual.elementos.map(el => (
+                    <span key={el} className="text-[9px] text-neutral-500 bg-neutral-800 px-1.5 py-0.5 rounded">
+                      {el}
+                    </span>
+                  ))}
+                </div>
+
+                {/* Execução resumida */}
+                <span className="text-[10px] text-neutral-600 flex-shrink-0 hidden lg:block">
+                  {ritual.execucao}
+                </span>
+
+                {/* Expand toggle */}
+                <button onClick={() => setExpandido(aberto ? null : ritual.nome)}
+                  className="text-neutral-600 hover:text-neutral-400 text-xs flex-shrink-0 w-4">
+                  {aberto ? "▲" : "▼"}
+                </button>
+              </div>
+
+              {/* Detalhes expandidos */}
+              {aberto && (
+                <div className="px-3 pb-3 space-y-3 border-t border-neutral-800/70 pt-3">
+                  {/* Parâmetros */}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1">
+                    {[
+                      ["Execução", ritual.execucao],
+                      ["Alcance", ritual.alcance],
+                      ritual.alvo ? ["Alvo", ritual.alvo] : null,
+                      ritual.area ? ["Área", ritual.area] : null,
+                      ritual.efeito ? ["Efeito", ritual.efeito] : null,
+                      ["Duração", ritual.duracao],
+                      ritual.resistencia ? ["Resistência", ritual.resistencia] : null,
+                    ].filter((x): x is [string, string] => x !== null).map(([k, v]) => (
+                      <div key={k!} className="text-xs">
+                        <span className="text-neutral-600">{k}: </span>
+                        <span className="text-neutral-300">{v}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Descrição */}
+                  <p className="text-xs text-neutral-400 leading-relaxed">{ritual.descricao}</p>
+
+                  {/* Melhorias */}
+                  {ritual.melhorias.length > 0 && (
+                    <div className="space-y-1.5">
+                      <p className="text-[10px] uppercase tracking-widest text-neutral-600">Melhorias</p>
+                      {ritual.melhorias.map((m, i) => (
+                        <div key={i} className="bg-neutral-900/60 rounded-lg px-3 py-2 space-y-0.5">
+                          <div className="flex items-center gap-2">
+                            <span className={clsx(
+                              "text-[9px] font-bold px-1.5 py-0.5 rounded border",
+                              m.tipo === "Verdadeiro"
+                                ? "border-red-700/60 text-red-400"
+                                : "border-blue-700/60 text-blue-400",
+                            )}>
+                              {m.tipo}
+                            </span>
+                            <span className="text-[10px] text-neutral-500">{m.custo}</span>
+                          </div>
+                          <p className="text-xs text-neutral-400 leading-relaxed">{m.texto}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      {!readOnly && (
+        <div className="flex items-center justify-between pt-4 border-t border-neutral-800">
+          <button onClick={onBack} className="text-sm text-neutral-500 hover:text-neutral-300 transition-colors">
+            ← Voltar
+          </button>
+          <button onClick={save} disabled={saving}
+            className="bg-red-800 hover:bg-red-700 text-white text-sm font-medium px-4 py-1.5 rounded-lg transition-colors disabled:opacity-50">
+            {saving ? "Salvando..." : "Concluir"}
+          </button>
+        </div>
+      )}
     </div>
   )
 }

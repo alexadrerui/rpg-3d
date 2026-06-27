@@ -1,4 +1,5 @@
 import type { GameSystem } from "../../types.js"
+import { genericInitiative } from "../../initiative.js"
 import { GenericCharacterSheet } from "./sheet.js"
 
 export const genericSystem: GameSystem = {
@@ -14,4 +15,5 @@ export const genericSystem: GameSystem = {
     avatar:        { type: "none" },
   }),
   CharacterSheet: GenericCharacterSheet,
+  initiative:     genericInitiative,
 }

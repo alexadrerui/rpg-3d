@@ -264,6 +264,7 @@ export type ApiGameSystem = {
   status: "PENDING" | "ACTIVE" | "REJECTED"
   authorId?: string | null; authorName?: string | null
   repositoryUrl?: string | null; manifest?: SystemManifest | null
+  rejectionReason?: string | null
   createdAt: string
 }
 
@@ -291,6 +292,25 @@ export const gameSystems = {
 
   purchase: (systemId: string) =>
     apiFetch<{ ok: boolean; credits: number }>(`/systems/${systemId}/purchase`, { method: "POST" }),
+
+  // Admin endpoints (requerem x-admin-secret no header)
+  adminList: (adminSecret: string, status?: "PENDING" | "ACTIVE" | "REJECTED") =>
+    apiFetch<ApiGameSystem[]>(`/systems/admin${status ? `?status=${status}` : ""}`, {
+      headers: { "x-admin-secret": adminSecret },
+    }),
+
+  adminApprove: (adminSecret: string, systemId: string) =>
+    apiFetch<ApiGameSystem>(`/systems/${systemId}/approve`, {
+      method: "POST",
+      headers: { "x-admin-secret": adminSecret },
+    }),
+
+  adminReject: (adminSecret: string, systemId: string, reason?: string) =>
+    apiFetch<ApiGameSystem>(`/systems/${systemId}/reject`, {
+      method: "POST",
+      headers: { "x-admin-secret": adminSecret },
+      body: JSON.stringify({ reason }),
+    }),
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

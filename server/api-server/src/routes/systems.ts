@@ -75,6 +75,20 @@ systemsRouter.get("/", requireAuth, async (req, res) => {
   })
 })
 
+// GET /systems/admin — lista sistemas para o painel admin (requer x-admin-secret)
+// DEVE ficar antes de /:id para evitar conflito de rota
+systemsRouter.get("/admin", async (req, res) => {
+  if (req.headers["x-admin-secret"] !== ADMIN_SECRET) {
+    return res.status(403).json({ error: "FORBIDDEN" })
+  }
+  const status = req.query.status as string | undefined
+  const systems = await prisma.gameSystemCatalog.findMany({
+    where: status ? { status: status as "PENDING" | "ACTIVE" | "REJECTED" } : undefined,
+    orderBy: { createdAt: "asc" },
+  })
+  return res.json(systems)
+})
+
 // GET /systems/mine — sistemas submetidos pelo usuário autenticado
 // DEVE ficar antes de /:id para evitar conflito de rota
 systemsRouter.get("/mine", requireAuth, async (req, res) => {
@@ -225,12 +239,13 @@ systemsRouter.post("/:id/reject", async (req, res) => {
     return res.status(403).json({ error: "FORBIDDEN" })
   }
   const systemId = String(req.params.id)
+  const { reason } = req.body as { reason?: string }
   const system = await prisma.gameSystemCatalog.findUnique({ where: { id: systemId } })
   if (!system) return res.status(404).json({ error: "SYSTEM_NOT_FOUND" })
 
   const updated = await prisma.gameSystemCatalog.update({
     where: { id: systemId },
-    data:  { status: "REJECTED", isActive: false },
+    data:  { status: "REJECTED", isActive: false, rejectionReason: reason ?? null },
   })
   return res.json(updated)
 })

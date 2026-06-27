@@ -41,6 +41,19 @@ internalRouter.post("/session-log", async (req, res) => {
   res.json({ ok: true, count: parsed.data.entries.length })
 })
 
+// GET /internal/campaigns/:id/system — systemId da campanha (p/ o game-server)
+internalRouter.get("/campaigns/:id/system", async (req, res) => {
+  if (!checkSecret(req, res)) return
+
+  const campaign = await prisma.campaign.findUnique({
+    where:  { id: req.params.id },
+    select: { systemId: true },
+  })
+  if (!campaign) { res.status(404).json({ error: "NOT_FOUND" }); return }
+
+  res.json({ systemId: campaign.systemId })
+})
+
 // POST /internal/session-end — mark session as ended
 internalRouter.post("/session-end", async (req, res) => {
   if (!checkSecret(req, res)) return

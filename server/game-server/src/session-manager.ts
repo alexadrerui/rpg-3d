@@ -65,6 +65,7 @@ export type RoomState = {
   sessionId:      string
   campaignId:     string
   masterId:       string
+  systemId:       string                                     // id do sistema de jogo da campanha ("" = ainda não resolvido)
   activeSceneId:  string | null
   activeSceneUrl: string | null
   participants:   Map<string, Participant>                    // userId → Participant
@@ -110,6 +111,7 @@ export class SessionManager {
       sessionId,
       campaignId,
       masterId,
+      systemId:       "",
       activeSceneId:  null,
       activeSceneUrl: null,
       participants:   new Map(),
@@ -171,6 +173,14 @@ export class SessionManager {
 
   isMaster(room: RoomState, userId: string): boolean {
     return room.masterId === userId
+  }
+
+  /** Define o sistema de jogo da room (uma vez) e persiste. */
+  setSystemId(room: RoomState, systemId: string): void {
+    if (!systemId || room.systemId === systemId) return
+    room.systemId = systemId
+    this.touch(room)
+    this.persist(room)
   }
 
   // ── Cena ─────────────────────────────────────────────────────────────────
@@ -416,6 +426,7 @@ export class SessionManager {
         sessionId:      room.sessionId,
         campaignId:     room.campaignId,
         masterId:       room.masterId,
+        systemId:       room.systemId,
         activeSceneId:  room.activeSceneId,
         activeSceneUrl: room.activeSceneUrl,
         disarmedTraps:  Array.from(room.disarmedTraps),
@@ -449,6 +460,7 @@ export class SessionManager {
         sessionId:      d.sessionId,
         campaignId:     d.campaignId,
         masterId:       d.masterId,
+        systemId:       d.systemId ?? "",
         activeSceneId:  d.activeSceneId,
         activeSceneUrl: d.activeSceneUrl,
         participants:   new Map((d.participants as Participant[]).map(p => [p.userId, p])),

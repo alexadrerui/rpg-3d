@@ -191,7 +191,11 @@ export function SystemStorePage() {
             ) : (
               <div className="grid gap-4">
                 {mine.map(s => (
-                  <MySystemCard key={s.id} system={s} />
+                  <MySystemCard
+                    key={s.id}
+                    system={s}
+                    onUpdated={updated => setMine(prev => prev.map(m => m.id === updated.id ? updated : m))}
+                  />
                 ))}
               </div>
             )}
@@ -263,30 +267,169 @@ const STATUS_LABELS: Record<string, { label: string; class: string }> = {
   REJECTED: { label: "Rejeitado",   class: "text-red-400 border-red-700/40 bg-red-950/40" },
 }
 
-function MySystemCard({ system: s }: { system: ApiGameSystem }) {
+function MySystemCard({ system: s, onUpdated }: { system: ApiGameSystem; onUpdated?: (s: ApiGameSystem) => void }) {
   const badge: { label: string; class: string } = STATUS_LABELS[s.status] ?? { label: "Em revisão", class: "text-amber-400 border-amber-700/40 bg-amber-950/40" }
+  const [editing, setEditing] = useState(false)
+
   return (
-    <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-5 space-y-2">
+    <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-5 space-y-3">
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-2 flex-wrap">
           <h3 className="font-medium text-neutral-200 text-sm">{s.name}</h3>
           <span className="text-[10px] text-neutral-600 font-mono border border-neutral-800 px-1.5 py-0.5 rounded">#{s.id}</span>
         </div>
-        <span className={clsx("text-[10px] border px-2 py-0.5 rounded-full shrink-0", badge.class)}>
-          {badge.label}
-        </span>
+        <div className="flex items-center gap-2 shrink-0">
+          {s.status !== "ACTIVE" && (
+            <button
+              type="button"
+              onClick={() => setEditing(e => !e)}
+              className="text-[10px] text-purple-400 hover:text-purple-300 transition-colors"
+            >
+              {editing ? "Cancelar" : "Editar"}
+            </button>
+          )}
+          <span className={clsx("text-[10px] border px-2 py-0.5 rounded-full", badge.class)}>
+            {badge.label}
+          </span>
+        </div>
       </div>
+
       <p className="text-xs text-neutral-500 leading-relaxed">{s.description}</p>
-      {s.status === "REJECTED" && (
-        <p className="text-xs text-red-400/80 bg-red-950/20 border border-red-900/30 rounded px-3 py-2">
-          Seu sistema foi rejeitado. Revise o manifest e reenvie pela aba "Publicar sistema".
-        </p>
+
+      {s.status === "REJECTED" && !editing && (
+        <div className="bg-red-950/20 border border-red-900/30 rounded px-3 py-2 space-y-1">
+          <p className="text-xs text-red-400/80">
+            Seu sistema foi rejeitado. {s.rejectionReason ? "Motivo:" : "Clique em Editar para revisar e reenviar."}
+          </p>
+          {s.rejectionReason && (
+            <p className="text-xs text-red-300/70 italic">{s.rejectionReason}</p>
+          )}
+        </div>
       )}
-      {s.repositoryUrl && (
-        <a href={s.repositoryUrl} target="_blank" rel="noreferrer" className="text-[10px] text-purple-400 hover:text-purple-300 transition-colors">
+
+      {s.repositoryUrl && !editing && (
+        <a href={s.repositoryUrl} target="_blank" rel="noreferrer" className="text-[10px] text-purple-400 hover:text-purple-300 transition-colors block">
           Repositório →
         </a>
       )}
+
+      {editing && (
+        <EditSystemForm
+          system={s}
+          onSaved={(updated) => { setEditing(false); onUpdated?.(updated) }}
+          onCancel={() => setEditing(false)}
+        />
+      )}
+    </div>
+  )
+}
+
+// ── Formulário de edição (sistemas PENDING/REJECTED) ─────────────────────────
+
+function EditSystemForm({ system: s, onSaved, onCancel }: {
+  system:   ApiGameSystem
+  onSaved:  (updated: ApiGameSystem) => void
+  onCancel: () => void
+}) {
+  const [form, setForm] = useState({
+    name:          s.name,
+    description:   s.description,
+    price:         s.price,
+    version:       s.version,
+    tags:          s.tags.join(", "),
+    thumbnail:     s.thumbnail ?? "",
+    repositoryUrl: s.repositoryUrl ?? "",
+  })
+  const [fields,  setFields]  = useState<ManifestField[]>(s.manifest?.fields ?? [defaultField()])
+  const [saving,  setSaving]  = useState(false)
+  const [error,   setError]   = useState<string | null>(null)
+
+  const set = (k: keyof typeof form, v: string | number) => setForm(f => ({ ...f, [k]: v }))
+
+  const addField    = () => setFields(f => [...f, defaultField()])
+  const removeField = (i: number) => setFields(f => f.filter((_, j) => j !== i))
+  const updateField = (i: number, patch: Partial<ManifestField>) =>
+    setFields(f => f.map((field, j) => j === i ? { ...field, ...patch } : field))
+
+  const handleSave = async () => {
+    setError(null); setSaving(true)
+    try {
+      const manifest: SystemManifest = { fields: fields.filter(f => f.id && f.label) }
+      const updated = await api.updateOwn(s.id, {
+        name:          form.name,
+        description:   form.description,
+        price:         Number(form.price),
+        version:       form.version,
+        tags:          form.tags.split(",").map(t => t.trim()).filter(Boolean),
+        thumbnail:     form.thumbnail || undefined,
+        repositoryUrl: form.repositoryUrl || undefined,
+        manifest,
+      })
+      onSaved(updated)
+    } catch (err: unknown) {
+      const e = err as { data?: { error?: string; issues?: { message: string }[] } }
+      if (e.data?.issues) setError(e.data.issues.map(i => i.message).join(", "))
+      else setError("Erro ao salvar. Verifique os dados e tente novamente.")
+    } finally { setSaving(false) }
+  }
+
+  return (
+    <div className="space-y-4 pt-2 border-t border-neutral-800">
+      {error && (
+        <div className="bg-red-950/40 border border-red-700/40 text-red-400 text-xs rounded-lg px-4 py-3">{error}</div>
+      )}
+
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Nome do sistema">
+          <input className={inputSm} value={form.name} onChange={e => set("name", e.target.value)} />
+        </Field>
+        <Field label="Versão">
+          <input className={inputSm} value={form.version} onChange={e => set("version", e.target.value)} />
+        </Field>
+      </div>
+      <Field label="Descrição">
+        <textarea className={`${inputSm} min-h-[60px] resize-y`} value={form.description} onChange={e => set("description", e.target.value)} />
+      </Field>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Preço (créditos)">
+          <input className={inputSm} type="number" min={0} value={form.price} onChange={e => set("price", e.target.value)} />
+        </Field>
+        <Field label="Tags (vírgula)">
+          <input className={inputSm} value={form.tags} onChange={e => set("tags", e.target.value)} />
+        </Field>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="URL thumbnail">
+          <input className={inputSm} value={form.thumbnail} onChange={e => set("thumbnail", e.target.value)} placeholder="https://..." />
+        </Field>
+        <Field label="URL repositório">
+          <input className={inputSm} value={form.repositoryUrl} onChange={e => set("repositoryUrl", e.target.value)} placeholder="https://github.com/..." />
+        </Field>
+      </div>
+
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <p className="text-[10px] text-neutral-500 uppercase tracking-wide">Campos da ficha</p>
+          <button type="button" onClick={addField} className="text-[10px] text-purple-400 hover:text-purple-300 transition-colors">+ Adicionar</button>
+        </div>
+        {fields.map((f, i) => (
+          <FieldRow key={i} field={f} onChange={p => updateField(i, p)} onRemove={() => removeField(i)} canRemove={fields.length > 1} />
+        ))}
+      </div>
+
+      <div className="flex gap-2 justify-end">
+        <button type="button" onClick={onCancel} className="text-xs text-neutral-500 hover:text-neutral-300 px-4 py-2 transition-colors">
+          Cancelar
+        </button>
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={saving}
+          className="bg-purple-700 hover:bg-purple-600 disabled:opacity-50 text-white text-xs font-medium px-5 py-2 rounded-lg transition-colors"
+        >
+          {saving ? "Salvando..." : "Salvar e reenviar para revisão"}
+        </button>
+      </div>
     </div>
   )
 }

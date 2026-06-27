@@ -215,3 +215,25 @@ export const invites = {
       `/invites/${token}/accept`, { method: "POST" }
     ),
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Game Systems
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type { SystemManifest } from "@rpg3d/game-systems"
+import type { SystemManifest } from "@rpg3d/game-systems"
+
+export type ApiGameSystem = {
+  id: string; name: string; description: string
+  price: number; version: string; tags: string[]
+  thumbnail?: string | null; isActive: boolean
+  status: "PENDING" | "ACTIVE" | "REJECTED"
+  manifest?: SystemManifest | null
+  rejectionReason?: string | null
+  createdAt: string
+}
+
+export const gameSystems = {
+  getDetail: (id: string) =>
+    apiFetch<ApiGameSystem>(`/systems/${id}`),
+}

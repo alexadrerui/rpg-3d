@@ -1,4 +1,5 @@
 import type { GameSystem } from "../../types.js"
+import { dnd5eInitiative } from "../../initiative.js"
 import { Dnd5eCharacterSheet } from "./sheet.js"
 
 export const dnd5eSystem: GameSystem = {
@@ -33,4 +34,5 @@ export const dnd5eSystem: GameSystem = {
     avatar:         { type: "none" },
   }),
   CharacterSheet: Dnd5eCharacterSheet,
+  initiative:     dnd5eInitiative,
 }

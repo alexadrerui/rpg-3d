@@ -19,7 +19,8 @@ import { CombatLog }           from "../components/hud/combat-log"
 import type { CombatLogEntry } from "../components/hud/combat-log"
 import type { CombatAbility }  from "../components/hud/combat-overlay"
 import { useSceneStore }  from "../store/scene-store"
-import { characters }     from "../lib/api-client"
+import { characters, gameSystems as systemsApi } from "../lib/api-client"
+import { systemRegistry, createManifestSystem }  from "@rpg3d/game-systems"
 
 const SERVER_URL = (import.meta as unknown as Record<string,Record<string,string>>).env?.VITE_GAME_SERVER_URL ?? "http://localhost:4001"
 
@@ -79,11 +80,23 @@ export function SessionPage() {
   useEffect(() => {
     if (!auth.characterId) return
     characters.get(auth.characterId)
-      .then(char => {
+      .then(async char => {
         const abs = char.sheetData?.combatAbilities as CombatAbility[] | undefined
         if (Array.isArray(abs)) setCharAbilities(abs)
         setSheetData(char.sheetData ?? {})
-        if (char.campaign?.systemId) setSystemId(char.campaign.systemId)
+        const sysId = char.campaign?.systemId ?? "generic"
+        setSystemId(sysId)
+        if (!systemRegistry.get(sysId)) {
+          try {
+            const sys = await systemsApi.getDetail(sysId)
+            if (sys.manifest) {
+              systemRegistry.register(createManifestSystem(
+                { id: sys.id, name: sys.name, description: sys.description, version: sys.version, price: sys.price, tags: sys.tags, thumbnail: sys.thumbnail ?? undefined },
+                sys.manifest,
+              ))
+            }
+          } catch {}
+        }
       })
       .catch(() => {})
   }, [auth.characterId])

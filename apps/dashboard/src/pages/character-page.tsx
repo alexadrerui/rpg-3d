@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react"
 import { useParams, useNavigate } from "react-router-dom"
-import { characters as charsApi, campaigns as campaignsApi, setApiToken, type ApiCharacter } from "../lib/api-client"
+import { characters as charsApi, campaigns as campaignsApi, gameSystems as systemsApi, setApiToken, type ApiCharacter } from "../lib/api-client"
 import { useAuthStore } from "../store/auth-store"
-import { systemRegistry } from "@rpg3d/game-systems"
+import { systemRegistry, createManifestSystem } from "@rpg3d/game-systems"
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CharacterPage — renderiza a ficha do sistema da campanha via registry
@@ -25,9 +25,21 @@ export function CharacterPage() {
     Promise.all([
       charsApi.list(campaignId),
       campaignsApi.get(campaignId),
-    ]).then(([chars, campaign]) => {
+    ]).then(async ([chars, campaign]) => {
       setCharacter(chars[0] ?? null)
-      setSystemId(campaign.systemId ?? "generic")
+      const sysId = campaign.systemId ?? "generic"
+      setSystemId(sysId)
+      if (!systemRegistry.get(sysId)) {
+        try {
+          const sys = await systemsApi.getDetail(sysId)
+          if (sys.manifest) {
+            systemRegistry.register(createManifestSystem(
+              { id: sys.id, name: sys.name, description: sys.description, version: sys.version, price: sys.price, tags: sys.tags, thumbnail: sys.thumbnail ?? undefined },
+              sys.manifest,
+            ))
+          }
+        } catch {}
+      }
     }).finally(() => setLoading(false))
   }, [campaignId])
 

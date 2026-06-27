@@ -21,6 +21,7 @@ import {
   type AnyTriggerNode,
 } from "@rpg3d/schema"
 import { rollDice, rollFormula } from "@rpg3d/dice-engine"
+import { resolveInitiativeSpec, rollInitiative } from "@rpg3d/game-systems/initiative"
 import { SessionManager }   from "./session-manager.js"
 import { logQueue }         from "./log-queue.js"
 import {
@@ -62,6 +63,20 @@ async function fetchSceneUrl(sceneId: string): Promise<string> {
     return data.url
   } catch {
     return `${STORAGE_URL}/${sceneId}.rpgscene`
+  }
+}
+
+/** Busca o systemId da campanha na api-server (server-to-server). "" se falhar. */
+async function fetchCampaignSystem(campaignId: string): Promise<string> {
+  try {
+    const res = await fetch(`${API_URL}/internal/campaigns/${campaignId}/system`, {
+      headers: { "x-server-secret": SERVER_SECRET },
+    })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const data = await res.json() as { systemId: string }
+    return data.systemId ?? ""
+  } catch {
+    return ""
   }
 }
 
@@ -735,16 +750,22 @@ export function registerHandlers(
     if (!room) return cb({ ok: false, error: "NOT_IN_ROOM" })
     if (!sessions.isMaster(room, user.sub)) return cb({ ok: false, error: "FORBIDDEN" })
 
+    // Garante que o sistema de jogo da campanha está resolvido (define como
+    // a iniciativa é calculada). Busca uma vez na api-server e cacheia na room.
+    if (!room.systemId) {
+      sessions.setSystemId(room, await fetchCampaignSystem(room.campaignId))
+    }
+    const systemId = room.systemId || undefined
+
     const combatants: CombatantEntry[] = []
 
-    // Player tokens — rola iniciativa com mod de Destreza
+    // Player tokens — iniciativa conforme o sistema de jogo (ver game-systems/initiative.ts)
     for (const [charId, token] of room.tokens) {
-      const sheet   = room.sheetStates.get(charId) ?? {}
-      const dex     = typeof sheet.dexterity === "number" ? (sheet.dexterity as number) : 10
-      const dexMod  = Math.floor((dex - 10) / 2)
-      const { total: initiative } = rollDice(1, 20, dexMod)
-      const hp      = typeof sheet.hp === "number" ? (sheet.hp as number) : null
-      const maxHp   = typeof sheet.maxHp === "number" ? (sheet.maxHp as number) : null
+      const sheet      = room.sheetStates.get(charId) ?? {}
+      const spec       = resolveInitiativeSpec(systemId, { sheet, isPlayer: true })
+      const initiative = rollInitiative(spec)
+      const hp         = typeof sheet.hp === "number" ? (sheet.hp as number) : null
+      const maxHp      = typeof sheet.maxHp === "number" ? (sheet.maxHp as number) : null
 
       const participant = room.participants.get(token.userId)
       combatants.push({
@@ -757,9 +778,10 @@ export function registerHandlers(
       })
     }
 
-    // NPC / enemy tokens — 1d20 puro
+    // NPC / enemy tokens — mesmo resolver do sistema, com ficha vazia (fallback do sistema)
     for (const [tokenId, npc] of room.npcTokens) {
-      const { total: initiative } = rollDice(1, 20, 0)
+      const spec       = resolveInitiativeSpec(systemId, { sheet: {}, isPlayer: false })
+      const initiative = rollInitiative(spec)
       combatants.push({
         id: tokenId, name: npc.name,
         initiative, hp: null, maxHp: null,

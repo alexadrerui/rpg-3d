@@ -14,6 +14,7 @@
   "dependencies": {
     "@rpg3d/schema": "*",
     "@rpg3d/dice-engine": "*",
+    "@rpg3d/game-systems": "*",
     "socket.io": "^4.8.1",
     "express": "^4.21.2",
     "ioredis": "^5.4.2",

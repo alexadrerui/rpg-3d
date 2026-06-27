@@ -1,4 +1,5 @@
 import type { GameSystem } from "../../types.js"
+import { ordemParanormalInitiative } from "../../initiative.js"
 import { OrdemParanormalCharacterSheet } from "./sheet.js"
 
 export const ordemParanormalSystem: GameSystem = {
@@ -24,4 +25,5 @@ export const ordemParanormalSystem: GameSystem = {
     avatar:          { type: "none" },
   }),
   CharacterSheet: OrdemParanormalCharacterSheet,
+  initiative:     ordemParanormalInitiative,
 }

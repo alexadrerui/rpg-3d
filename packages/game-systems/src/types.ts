@@ -1,4 +1,5 @@
 import type { ComponentType } from "react"
+import type { InitiativeResolver } from "./initiative.js"
 
 export interface CharacterSheetProps {
   data:     Record<string, unknown>
@@ -39,6 +40,8 @@ export interface GameSystemMeta {
 export interface GameSystem extends GameSystemMeta {
   defaultData:    () => Record<string, unknown>
   CharacterSheet: ComponentType<CharacterSheetProps>
+  /** Como o sistema calcula iniciativa (server-safe, sem React). Ausente → 1d20. */
+  initiative?:    InitiativeResolver
 }
 
 // ── Manifest — define campos da ficha para sistemas externos ──────────────────

@@ -176,11 +176,12 @@ model GameSystemCatalog {
   tags          String[]
   isActive      Boolean       @default(true)
   status        SystemStatus  @default(PENDING)
-  authorId      String?
-  authorName    String?
-  repositoryUrl String?
-  manifest      Json?         // ManifestField[] — define campos da ficha para sistemas externos
-  createdAt     DateTime      @default(now())
+  authorId        String?
+  authorName      String?
+  repositoryUrl   String?
+  manifest        Json?         // ManifestField[] — define campos da ficha para sistemas externos
+  rejectionReason String?       // motivo enviado pelo admin ao rejeitar
+  createdAt       DateTime      @default(now())
 
   author    User?              @relation("SystemAuthor", fields: [authorId], references: [id])
   purchases UserSystemPurchase[]
