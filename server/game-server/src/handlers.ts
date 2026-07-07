@@ -192,6 +192,13 @@ export function registerHandlers(
 
     cb({ ok: true, data: undefined })
 
+    // Confirma a entrada para o próprio socket com o estado atual da sala
+    socket.emit("room:joined", {
+      sessionId,
+      sceneId:      room.activeSceneId ?? "",
+      participants: sessions.getParticipantsList(room),
+    })
+
     logQueue.push({
       sessionId:  sessionId,
       campaignId: campaignId,

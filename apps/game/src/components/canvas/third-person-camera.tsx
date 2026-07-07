@@ -23,8 +23,12 @@ export function ThirdPersonCamera({ token, enemies }: Props) {
   const _destPos  = useRef(new THREE.Vector3())
   const _destLook = useRef(new THREE.Vector3())
 
-  useFrame(() => {
+  useFrame((state) => {
     if (!camRef.current) return
+
+    // O ViewerCamera do Pascal também usa makeDefault e pode roubar a câmera
+    // default (ordem de mount / remount por troca de cameraMode). Reafirma a posse.
+    if (state.camera !== camRef.current) state.set({ camera: camRef.current })
 
     const { position, rotation } = token
     const rotRad = (rotation * Math.PI) / 180

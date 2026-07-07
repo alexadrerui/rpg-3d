@@ -14,8 +14,8 @@ export type AvatarType = z.infer<typeof AvatarType>
 
 /** C→S: jogador/mestre entra na sala */
 export const EvJoinRoom = z.object({
-  campaignId:  z.string().uuid(),
-  sessionId:   z.string().uuid(),
+  campaignId:  z.string().min(1),   // cuid do Prisma — não é UUID
+  sessionId:   z.string().min(1),
   characterId: z.string().optional(),   // undefined = mestre
   token:       z.string(),              // JWT
   avatarType:  AvatarType.optional(),
@@ -36,8 +36,8 @@ export type EvParticipant = z.infer<typeof EvParticipant>
 
 /** S→C: confirmação de entrada com estado atual */
 export const EvRoomJoined = z.object({
-  sessionId:    z.string().uuid(),
-  sceneId:      z.string().uuid(),
+  sessionId:    z.string().min(1),
+  sceneId:      z.string().min(1),
   participants: z.array(EvParticipant),
 })
 
@@ -45,13 +45,13 @@ export const EvRoomJoined = z.object({
 
 /** C→S (mestre): carrega uma cena na sala */
 export const EvLoadScene = z.object({
-  sceneId:      z.string().uuid(),
+  sceneId:      z.string().min(1),
   transitionFx: z.enum(["fade", "dissolve", "none"]).default("fade"),
 })
 
 /** S→C: broadcast para todos carregarem a cena */
 export const EvSceneLoaded = z.object({
-  sceneId:      z.string().uuid(),
+  sceneId:      z.string().min(1),
   sceneUrl:     z.string().url(),       // URL do .rpgscene no storage
   transitionFx: z.enum(["fade", "dissolve", "none"]),
 })

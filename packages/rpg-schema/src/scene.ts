@@ -8,8 +8,8 @@ import { EnvironmentConfig } from "./environment.js"
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const SceneMeta = z.object({
-  id:          z.string().uuid(),
-  campaignId:  z.string().uuid(),
+  id:          z.string().min(1),   // cuid do Prisma — não é UUID
+  campaignId:  z.string().min(1),
   name:        z.string().min(1).max(120),
   description: z.string().max(2000).optional(),
   tags:        z.array(z.string()).default([]),   // ex: ["dungeon", "boss", "lv3"]

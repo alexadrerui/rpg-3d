@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef } from "react"
 import { useFrame, useThree }                          from "@react-three/fiber"
 import * as THREE from "three"
+import { StorageTexture, MeshBasicNodeMaterial } from "three/webgpu"
 import {
   Fn, If, instancedArray, instanceIndex, uniform,
   storageTexture as tslStorageTexture, textureStore,
@@ -48,7 +49,7 @@ export function FogOfWarOverlay({ cells, config, enabled }: Props) {
     if (!isWebGPU) return null
 
     // Textura de estado da névoa: canal R = opacidade (1.0 = opaco, 0.0 = revelado)
-    const fogTex   = new (THREE as any).StorageTexture(TEXTURE_SIZE, TEXTURE_SIZE)
+    const fogTex   = new StorageTexture(TEXTURE_SIZE, TEXTURE_SIZE)
     const fogStore = tslStorageTexture(fogTex)
     const fogRead  = tslTexture(fogTex)
 
@@ -106,7 +107,7 @@ export function FogOfWarOverlay({ cells, config, enabled }: Props) {
       return vec4(fogColor, fogVal.mul(fogOpacity))
     })()
 
-    const material = new (THREE as any).MeshBasicNodeMaterial({
+    const material = new MeshBasicNodeMaterial({
       transparent: true,
       depthWrite:  false,
     }) as THREE.Material

@@ -20,7 +20,7 @@ type Props = {
 }
 
 export function IsoCamera({ config, targetPosition }: Props) {
-  const { gl, size } = useThree()
+  const { gl } = useThree()
   const camRef     = useRef<THREE.OrthographicCamera>(null)
   const targetRef  = useRef(new THREE.Vector3(0, 0, 0))
   const zoomRef    = useRef(20)
@@ -42,8 +42,12 @@ export function IsoCamera({ config, targetPosition }: Props) {
   }, [config])
 
   // ── Loop de render ─────────────────────────────────────────────────────────
-  useFrame((_, delta) => {
+  useFrame((state, delta) => {
     if (!camRef.current) return
+
+    // O ViewerCamera do Pascal também usa makeDefault e pode roubar a câmera
+    // default (ordem de mount / remount por troca de cameraMode). Reafirma a posse.
+    if (state.camera !== camRef.current) state.set({ camera: camRef.current })
 
     if (targetPosition) {
       // Lerp frame-rate independent: mesmo resultado visual a 30, 60 ou 120fps
@@ -142,16 +146,14 @@ export function IsoCamera({ config, targetPosition }: Props) {
     }
   }, [gl]) // config nunca entra aqui — lido via configRef dentro dos handlers
 
-  const aspect = size.width / size.height
-  const s      = 10
-
+  // Sem frustum manual: R3F calcula left/right/top/bottom do tamanho do canvas,
+  // e zoom passa a ser "pixels por unidade de mundo" — consistente com o
+  // minZoom/maxZoom (5–50) do CameraConfig. Frustum manual + zoom dobrava a escala.
   return (
     <OrthographicCamera
       ref={camRef}
       makeDefault
-      left={-s * aspect} right={s * aspect}
-      top={s}            bottom={-s}
-      near={-1000}       far={1000}
+      near={-1000} far={1000}
       zoom={20}
     />
   )
