@@ -98,6 +98,7 @@ export function DiceOverlay({ serverUrl }: Props) {
           key={roll.id}
           diceCount={roll.diceCount}
           diceFaces={roll.diceFaces}
+          rolls={roll.rolls}
           appearance={appearance}
           velMul={forceMul.vel}
           angMul={forceMul.ang}

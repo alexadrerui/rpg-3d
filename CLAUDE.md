@@ -318,7 +318,7 @@ O projeto usa **Zod v4** (breaking changes em relação ao v3):
 | Token 3D arrastável com pointer capture | `apps/game/src/components/tokens/token-mesh.tsx` |
 | Chat com 4 canais + mini-markdown | `apps/game/src/components/chat/chat-panel.tsx` |
 | Painel de dados d4–d% com histórico + toggle 3D | `apps/game/src/components/dice/dice-panel.tsx` |
-| Física de dados 3D (Rapier) — geometrias, assentamento, temas, materiais PBR | `apps/game/src/components/dice/`, `apps/game/src/store/dice-settings-store.ts` |
+| Física de dados 3D (Rapier) — geometrias (d10 trapezoedro real), faces numeradas, troca de face para o resultado do servidor (esquema Dice So Nice), assentamento, temas, materiais PBR | `apps/game/src/components/dice/`, `apps/game/src/store/dice-settings-store.ts` |
 | Tokens NPC/enemy — spawn via popup, arrastar (mestre), despawn com duplo-clique, broadcast WS | `apps/game/src/components/canvas/game-canvas.tsx`, `packages/sync-client/src/use-game-room.ts` |
 | Notificações de triggers com detalhes de armadilha | `apps/game/src/components/hud/trigger-notifications.tsx` |
 | Controles do mestre com lista de cenas da API | `apps/game/src/components/hud/master-controls.tsx` |
