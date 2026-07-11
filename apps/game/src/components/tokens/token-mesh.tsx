@@ -1,7 +1,7 @@
 import { useRef, useState, useCallback, Component } from "react"
 import type { ErrorInfo, ReactNode } from "react"
 import { useFrame, useThree }  from "@react-three/fiber"
-import { Text, Circle, Billboard, useTexture } from "@react-three/drei"
+import { Html, Circle, Billboard, useTexture } from "@react-three/drei"
 import { useGLTF }             from "@react-three/drei"
 import * as THREE from "three"
 import type { TokenPosition }  from "@rpg3d/sync-client"
@@ -55,7 +55,9 @@ export function TokenMesh({ token, name, role = "player", isOwn, isMaster, avata
     if (!canDrag) return
     e.stopPropagation()
     isDragging.current = true
-    gl.domElement.setPointerCapture(e.pointerId)
+    // pointerId pode não estar ativo (touch cancelado, eventos sintéticos) —
+    // uma exceção aqui não pode abortar o drag
+    try { gl.domElement.setPointerCapture(e.pointerId) } catch {}
 
     // Calcula offset para drag suave
     const intersect = new THREE.Vector3()
@@ -82,7 +84,9 @@ export function TokenMesh({ token, name, role = "player", isOwn, isMaster, avata
   const onPointerUp = useCallback((e: React.PointerEvent) => {
     if (!isDragging.current || !meshRef.current) return
     isDragging.current = false
-    gl.domElement.releasePointerCapture(e.pointerId)
+    // Uma exceção aqui não pode engolir o onMove — o commit da posição
+    // (token:move via WebSocket) tem que acontecer sempre
+    try { gl.domElement.releasePointerCapture(e.pointerId) } catch {}
 
     const pos = meshRef.current.position
     onMove?.(
@@ -140,19 +144,18 @@ export function TokenMesh({ token, name, role = "player", isOwn, isMaster, avata
         }
       </AvatarBoundary>
 
-      {/* Name label / despawn hint ao hover */}
+      {/* Name label / despawn hint ao hover — Html (DOM) em vez de <Text>:
+          o troika usa ShaderMaterial GLSL, incompatível com o post-processing
+          MRT do Pascal sob WebGPU (invalida o pipeline e a tela fica preta) */}
       {hovered && (
-        <Text
-          position={[0, 0.7, 0]}
-          fontSize={0.18}
-          color={canDespawn ? "#ef4444" : "#ffffff"}
-          anchorX="center"
-          anchorY="bottom"
-          outlineWidth={0.02}
-          outlineColor="#000000"
-        >
-          {canDespawn ? `${name} [2x]` : name}
-        </Text>
+        <Html position={[0, 0.75, 0]} center zIndexRange={[90, 0]} style={{ pointerEvents: "none" }}>
+          <span style={{
+            color: canDespawn ? "#ef4444" : "#ffffff",
+            whiteSpace: "nowrap", fontSize: 12, fontWeight: 600, textShadow: "0 1px 3px #000",
+          }}>
+            {canDespawn ? `${name} [2x]` : name}
+          </span>
+        </Html>
       )}
 
       {/* Own token indicator */}
@@ -177,9 +180,11 @@ function TokenCylinder({ color, name }: { color: string; name: string }) {
         <cylinderGeometry args={[0.35, 0.42, 0.24, 16]} />
         <meshStandardMaterial color={color} roughness={0.5} metalness={0.2} emissive={color} emissiveIntensity={0.1} />
       </mesh>
-      <Text position={[0, 0.28, 0]} fontSize={0.28} color="#ffffff" anchorX="center" anchorY="middle">
-        {name.charAt(0).toUpperCase()}
-      </Text>
+      <Html position={[0, 0.28, 0]} center zIndexRange={[80, 0]} style={{ pointerEvents: "none" }}>
+        <span style={{ color: "#ffffff", fontSize: 14, fontWeight: 700, textShadow: "0 1px 3px #000" }}>
+          {name.charAt(0).toUpperCase()}
+        </span>
+      </Html>
     </>
   )
 }

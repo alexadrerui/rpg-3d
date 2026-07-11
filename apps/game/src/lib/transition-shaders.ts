@@ -9,10 +9,11 @@
 
 export const VERTEX_SHADER = /* glsl */ `
   attribute vec2 aPosition;
+  uniform vec2 uScale;   // contain-fit: encolhe o quad no eixo necessário p/ manter o aspect do vídeo
   varying vec2 vUv;
   void main() {
     vUv = aPosition * 0.5 + 0.5;
-    gl_Position = vec4(aPosition, 0.0, 1.0);
+    gl_Position = vec4(aPosition * uScale, 0.0, 1.0);
   }
 `
 

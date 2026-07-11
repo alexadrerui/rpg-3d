@@ -40,7 +40,7 @@ export function DicePanel({ serverUrl, characterId, dice3d, onToggleDice3d }: Pr
 
   const handleRoll = (faces: DiceFace) => {
     roll(faces, { count, modifier: modifier || 0, label: label || undefined, isSecret: secret, characterId })
-      .catch(() => {/* ignore */})
+      .catch((err) => console.error("[dice] rolagem falhou:", err))
   }
 
   return (

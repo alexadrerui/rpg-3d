@@ -11,6 +11,7 @@ import {
   compileShader,
   createProgram,
 } from "../../lib/transition-shaders"
+import { playWithAutoplayFallback } from "../../lib/autoplay"
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tipos
@@ -31,6 +32,7 @@ interface GlState {
   uProgress: WebGLUniformLocation
   uTime:     WebGLUniformLocation
   uVideo:    WebGLUniformLocation
+  uScale:    WebGLUniformLocation
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -41,13 +43,15 @@ interface CinematicOverlayProps {
   videoState: VideoState | null
   /** Sinaliza à session-page que o jogo deve ser obscurecido */
   onDimGame:  (dim: boolean) => void
+  /** Chamado quando o vídeo termina — o mestre usa para emitir video:stop */
+  onEnded?:   () => void
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CinematicOverlay
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function CinematicOverlay({ videoState, onDimGame }: CinematicOverlayProps) {
+export function CinematicOverlay({ videoState, onDimGame, onEnded }: CinematicOverlayProps) {
   const canvasRef  = useRef<HTMLCanvasElement>(null)
   const videoRef   = useRef<HTMLVideoElement>(null)
   const glRef      = useRef<GlState | null>(null)
@@ -61,6 +65,13 @@ export function CinematicOverlay({ videoState, onDimGame }: CinematicOverlayProp
   const [phase, setPhase]     = useState<Phase>("idle")
   const [showCanvas, setShowCanvas] = useState(false)
   const [showVideo, setShowVideo]   = useState(false)
+  const [needsUnmute, setNeedsUnmute] = useState(false)
+
+  const playVideo = useCallback(() => {
+    const vid = videoRef.current
+    if (!vid) return
+    playWithAutoplayFallback(vid).then((r) => setNeedsUnmute(r !== "ok"))
+  }, [])
 
   // ── WebGL setup ────────────────────────────────────────────────────────────
 
@@ -83,6 +94,7 @@ export function CinematicOverlay({ videoState, onDimGame }: CinematicOverlayProp
         existing.uProgress    = gl.getUniformLocation(prog, "uProgress")!
         existing.uTime        = gl.getUniformLocation(prog, "uTime")!
         existing.uVideo       = gl.getUniformLocation(prog, "uVideo")!
+        existing.uScale       = gl.getUniformLocation(prog, "uScale")!
         return existing
       } catch (e) {
         console.error("[cinematic] shader compile:", e)
@@ -92,6 +104,9 @@ export function CinematicOverlay({ videoState, onDimGame }: CinematicOverlayProp
 
     const gl = canvas.getContext("webgl2", { alpha: true, premultipliedAlpha: false })
     if (!gl) { console.error("[cinematic] WebGL2 não disponível"); return null }
+
+    // Vídeo chega com Y invertido no espaço de textura do GL
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true)
 
     try {
       const fsSrc = FRAGMENT_SHADERS[effect] ?? FRAGMENT_SHADERS.fade ?? ""
@@ -121,6 +136,7 @@ export function CinematicOverlay({ videoState, onDimGame }: CinematicOverlayProp
         uProgress: gl.getUniformLocation(prog, "uProgress")!,
         uTime:     gl.getUniformLocation(prog, "uTime")!,
         uVideo:    gl.getUniformLocation(prog, "uVideo")!,
+        uScale:    gl.getUniformLocation(prog, "uScale")!,
       }
       glRef.current = state
       return state
@@ -136,7 +152,7 @@ export function CinematicOverlay({ videoState, onDimGame }: CinematicOverlayProp
     const state = glRef.current
     if (!state) return
 
-    const { gl, program, texture, posBuffer, uProgress, uTime, uVideo } = state
+    const { gl, program, texture, posBuffer, uProgress, uTime, uVideo, uScale } = state
     const vid = videoRef.current
 
     // Sincroniza canvas com tamanho da tela
@@ -172,6 +188,7 @@ export function CinematicOverlay({ videoState, onDimGame }: CinematicOverlayProp
         setPhase("idle")
         setShowCanvas(false)
         setShowVideo(false)
+        setNeedsUnmute(false)
         onDimGame(false)
         cancelAnimationFrame(rafRef.current)
         return
@@ -197,6 +214,17 @@ export function CinematicOverlay({ videoState, onDimGame }: CinematicOverlayProp
     gl.uniform1f(uProgress, progressRef.current)
     gl.uniform1f(uTime, (ts - startRef.current) * 0.001)
 
+    // Contain-fit: preserva o aspect do vídeo encolhendo o quad no eixo excedente
+    const videoAspect  = vid && vid.videoWidth > 0 ? vid.videoWidth / vid.videoHeight : 0
+    const screenAspect = w / h
+    if (videoAspect > 0 && screenAspect > videoAspect) {
+      gl.uniform2f(uScale, videoAspect / screenAspect, 1)
+    } else if (videoAspect > 0) {
+      gl.uniform2f(uScale, 1, screenAspect / videoAspect)
+    } else {
+      gl.uniform2f(uScale, 1, 1)
+    }
+
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
 
     rafRef.current = requestAnimationFrame(renderFrame)
@@ -216,7 +244,7 @@ export function CinematicOverlay({ videoState, onDimGame }: CinematicOverlayProp
       onDimGame(false)
       if (videoRef.current) {
         videoRef.current.src = vs.url
-        if (vs.playing) videoRef.current.play().catch(() => {})
+        if (vs.playing) playVideo()
         else videoRef.current.pause()
       }
       return
@@ -232,7 +260,7 @@ export function CinematicOverlay({ videoState, onDimGame }: CinematicOverlayProp
       // Carrega o vídeo no elemento oculto (fonte de textura + áudio)
       if (videoRef.current) {
         videoRef.current.src = vs.url
-        videoRef.current.play().catch(() => {})
+        playVideo()
       }
 
       // Inicia transição
@@ -258,6 +286,7 @@ export function CinematicOverlay({ videoState, onDimGame }: CinematicOverlayProp
       if (prevPhase === "overlay") {
         setPhase("idle")
         setShowVideo(false)
+        setNeedsUnmute(false)
         phaseRef.current = "idle"
         if (videoRef.current) { videoRef.current.pause(); videoRef.current.src = "" }
         return
@@ -279,7 +308,7 @@ export function CinematicOverlay({ videoState, onDimGame }: CinematicOverlayProp
 
     // Sincroniza play/pause no overlay
     if (vs && videoRef.current) {
-      if (vs.playing) videoRef.current.play().catch(() => {})
+      if (vs.playing) playVideo()
       else videoRef.current.pause()
     }
   }, [
@@ -296,12 +325,13 @@ export function CinematicOverlay({ videoState, onDimGame }: CinematicOverlayProp
   // ── Render ─────────────────────────────────────────────────────────────────
 
   const isOverlay  = phase === "overlay"
-  const isActive   = phase !== "idle"
 
   const overlayOpacity = videoState?.overlayOpacity ?? 1
   const blendMode      = (videoState?.overlayBlend ?? "normal") as React.CSSProperties["mixBlendMode"]
 
-  if (!isActive) return null
+  // IMPORTANTE: video e canvas ficam sempre montados (display:none quando idle).
+  // O effect da máquina de estados precisa dos refs no primeiro video:state —
+  // com early return aqui, initGl()/videoRef viam null e a fase nunca saía de idle.
 
   return (
     <>
@@ -312,6 +342,7 @@ export function CinematicOverlay({ videoState, onDimGame }: CinematicOverlayProp
         loop={false}
         playsInline
         crossOrigin="anonymous"
+        onEnded={onEnded}
         className="fixed inset-0 w-full h-full pointer-events-none"
         style={{
           objectFit: "cover",
@@ -340,11 +371,22 @@ export function CinematicOverlay({ videoState, onDimGame }: CinematicOverlayProp
         <LetterboxBars />
       )}
 
-      {/* Indicador de fase (debug — remover em produção) */}
-      {process.env.NODE_ENV === "development" && (
-        <div className="fixed bottom-2 left-1/2 -translate-x-1/2 z-[80] text-[10px] text-white/40 pointer-events-none">
-          [{phase}] p={progressRef.current.toFixed(2)}
-        </div>
+      {/* Autoplay bloqueado sem gesto do usuário: tocamos mutado e oferecemos o som.
+          Único elemento de UI permitido durante cinematic/overlay — some após o clique. */}
+      {needsUnmute && phase !== "idle" && (
+        <button
+          type="button"
+          onClick={() => {
+            const v = videoRef.current
+            if (v) { v.muted = false; v.play().catch(() => {}) }
+            setNeedsUnmute(false)
+          }}
+          className="fixed bottom-4 right-4 flex items-center gap-1.5 bg-neutral-950/80 hover:bg-neutral-900 text-neutral-300 text-xs px-3 py-1.5 rounded-full border border-neutral-600/50 shadow-lg backdrop-blur-sm transition-colors"
+          style={{ zIndex: 75 }}
+        >
+          <span>🔊</span>
+          <span>Ativar som</span>
+        </button>
       )}
     </>
   )
@@ -359,11 +401,11 @@ function LetterboxBars() {
     <>
       <div
         className="fixed left-0 right-0 top-0 bg-black pointer-events-none"
-        style={{ zIndex: 68, height: "6vh", transition: "height 600ms ease" }}
+        style={{ zIndex: 72, height: "6vh", transition: "height 600ms ease" }}
       />
       <div
         className="fixed left-0 right-0 bottom-0 bg-black pointer-events-none"
-        style={{ zIndex: 68, height: "6vh", transition: "height 600ms ease" }}
+        style={{ zIndex: 72, height: "6vh", transition: "height 600ms ease" }}
       />
     </>
   )

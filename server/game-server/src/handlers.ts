@@ -168,13 +168,11 @@ export function registerHandlers(
     sessions.join(room, {
       userId:      user.sub,
       name:        user.name,
-      socketId:    socket.id,
       characterId,
       isMaster,
-      isOnline:    true,
       avatarType,
       avatarUrl,
-    })
+    }, socket.id)
 
     currentSessionId = sessionId
     await socket.join(sessionId)
@@ -397,7 +395,7 @@ export function registerHandlers(
       // Mensagem privada: só remetente e destinatário
       const target = Array.from(room.participants.values()).find(p => p.userId === toUserId)
       socket.emit("chat:message", message)
-      if (target?.socketId) io.to(target.socketId).emit("chat:message", message)
+      if (target && target.socketIds.length > 0) io.to(target.socketIds).emit("chat:message", message)
 
     } else if (channel === "master") {
       // Só o mestre e o remetente veem
@@ -456,8 +454,8 @@ export function registerHandlers(
       // Rolagem secreta: só remetente e mestre
       socket.emit("dice:result", result)
       const master = Array.from(room.participants.values()).find(p => p.isMaster)
-      if (master?.socketId && master.userId !== user.sub) {
-        io.to(master.socketId).emit("dice:result", result)
+      if (master && master.socketIds.length > 0 && master.userId !== user.sub) {
+        io.to(master.socketIds).emit("dice:result", result)
       }
     } else {
       // Broadcast para toda sala
@@ -973,7 +971,11 @@ export function registerHandlers(
     if (!room) return
 
     const isMasterLeaving = sessions.isMaster(room, user.sub)
-    sessions.leave(room, user.sub)
+    const wentOffline     = sessions.leave(room, user.sub, socket.id)
+
+    // Usuário ainda tem outra conexão ativa (outra aba/script com o mesmo login):
+    // não notificar saída nem encerrar a sessão.
+    if (!wentOffline) return
 
     const leaving = room.participants.get(user.sub)
     socket.to(currentSessionId).emit("room:participant", {

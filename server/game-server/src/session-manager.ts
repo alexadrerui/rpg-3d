@@ -8,7 +8,7 @@ import type { EvRoomJoined, EvTokenMoved, CombatantEntry, EvCombatState, VideoMo
 export type Participant = {
   userId:      string
   name:        string
-  socketId:    string
+  socketIds:   string[]          // conexões ativas do usuário (multi-aba, scripts)
   characterId: string | undefined
   isMaster:    boolean
   isOnline:    boolean
@@ -136,25 +136,42 @@ export class SessionManager {
 
   // ── Participantes ─────────────────────────────────────────────────────────
 
-  join(room: RoomState, participant: Participant): void {
-    room.participants.set(participant.userId, { ...participant, isOnline: true })
+  join(room: RoomState, participant: Omit<Participant, "socketIds" | "isOnline">, socketId: string): void {
+    const existing = room.participants.get(participant.userId)
+    if (existing) {
+      // Mesmo usuário com outra conexão (segunda aba, script) — acumula o socket
+      if (!existing.socketIds.includes(socketId)) existing.socketIds.push(socketId)
+      existing.isOnline    = true
+      existing.name        = participant.name
+      existing.characterId = participant.characterId
+      existing.isMaster    = participant.isMaster
+      existing.avatarType  = participant.avatarType
+      existing.avatarUrl   = participant.avatarUrl
+    } else {
+      room.participants.set(participant.userId, { ...participant, socketIds: [socketId], isOnline: true })
+    }
     this.touch(room)
   }
 
-  leave(room: RoomState, userId: string): void {
+  /** Remove uma conexão do participante. Retorna true se era a última (usuário ficou offline). */
+  leave(room: RoomState, userId: string, socketId: string): boolean {
     const p = room.participants.get(userId)
-    if (p) {
-      p.isOnline = false
-      p.socketId = ""
+    if (!p) return false
+    p.socketIds = p.socketIds.filter(id => id !== socketId)
+    if (p.socketIds.length > 0) {
+      this.touch(room)
+      return false
     }
+    p.isOnline = false
     this.touch(room)
+    return true
   }
 
   reconnect(room: RoomState, userId: string, socketId: string): void {
     const p = room.participants.get(userId)
     if (p) {
-      p.isOnline  = true
-      p.socketId  = socketId
+      p.isOnline = true
+      if (!p.socketIds.includes(socketId)) p.socketIds.push(socketId)
     }
     this.touch(room)
   }
@@ -463,7 +480,9 @@ export class SessionManager {
         systemId:       d.systemId ?? "",
         activeSceneId:  d.activeSceneId,
         activeSceneUrl: d.activeSceneUrl,
-        participants:   new Map((d.participants as Participant[]).map(p => [p.userId, p])),
+        // Sockets persistidos são de conexões mortas — restaura todos como offline;
+        // clientes reconectando emitem room:join e voltam a ficar online.
+        participants:   new Map((d.participants as Participant[]).map(p => [p.userId, { ...p, socketIds: [], isOnline: false }])),
         tokens:         new Map(),
         npcTokens:      new Map((d.npcTokens as NpcTokenState[] ?? []).map(n => [n.tokenId, n])),
         sheetStates:    new Map(),

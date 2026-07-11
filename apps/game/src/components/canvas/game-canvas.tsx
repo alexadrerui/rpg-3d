@@ -1,6 +1,6 @@
 import { Suspense, useEffect, useMemo, useRef, useState, lazy } from "react"
 import { Canvas }             from "@react-three/fiber"
-import { Grid, Circle, Text, Html, Sky } from "@react-three/drei"
+import { Grid, Circle, Html, Sky } from "@react-three/drei"
 import * as THREE             from "three"
 import { useViewer }          from "@pascal-app/viewer"
 import { IsoCamera }          from "./iso-camera"
@@ -346,21 +346,20 @@ function NpcMarker({ node, onSpawn }: { node: SpawnNode; onSpawn?: (data: EvSpaw
       <Circle args={[0.52, 32]} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]}>
         <meshStandardMaterial color={color} opacity={0.25} transparent />
       </Circle>
+      {/* Label em Html (DOM): o <Text> do drei/troika usa ShaderMaterial GLSL,
+          incompatível com o post-processing MRT do Pascal sob WebGPU
+          (invalida o pipeline e a tela fica preta) */}
       {!open && (
-        <Text
-          position={[0, 0.6, 0]}
-          fontSize={0.2}
-          color={color}
-          anchorX="center"
-          anchorY="middle"
-          outlineWidth={0.03}
-          outlineColor="#000000"
-        >
-          {hovered ? `+ ${defaultName}` : defaultName}
-        </Text>
+        <Html position={[0, 0.6, 0]} center zIndexRange={[90, 0]} style={{ pointerEvents: "none" }}>
+          <span style={{ color, whiteSpace: "nowrap", fontSize: 12, fontWeight: 600, textShadow: "0 1px 3px #000" }}>
+            {hovered ? `+ ${defaultName}` : defaultName}
+          </span>
+        </Html>
       )}
+      {/* Popup sem distanceFactor: com câmera ortográfica ele escala pelo zoom
+          e explode o tamanho — tamanho de tela fixo é o desejado */}
       {open && (
-        <Html position={[0, 1.4, 0]} center distanceFactor={8} zIndexRange={[100, 0]}>
+        <Html position={[0, 1.4, 0]} center zIndexRange={[100, 0]}>
           <div
             className="bg-neutral-900 border border-neutral-700 rounded-xl p-3 shadow-2xl"
             style={{ minWidth: 176 }}

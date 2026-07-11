@@ -187,6 +187,17 @@ export function SessionPage() {
               onEndCombat={() => room.endCombat().catch(console.error)}
             />
           )}
+          {/* VÍDEO — controle do mestre (botão + picker); o painel em si é fixed */}
+          {isMaster && (
+            <VideoPlayer
+              videoState={room.videoState}
+              videoAssets={sceneVideos}
+              isMaster
+              onPlay={(data) => room.playVideo(data).catch(console.error)}
+              onPause={() => room.pauseVideo().catch(console.error)}
+              onStop={() => room.stopVideo().catch(console.error)}
+            />
+          )}
         </div>
 
         {/* TOP RIGHT — participantes (desloca quando combat tracker ativo) */}
@@ -283,38 +294,19 @@ export function SessionPage() {
           </div>
         )}
 
-        {/* VÍDEO — routing por modo */}
-        {(() => {
-          const vs = room.videoState
-          const vMode = vs?.mode
-
-          // Jogadores não veem VideoPlayer em cinematic/overlay — CinematicOverlay cobre tudo
-          if (!isMaster && (vMode === "cinematic" || vMode === "overlay")) return null
-
-          return isMaster ? (
-            <div className="absolute bottom-24 right-4 pointer-events-auto">
-              <VideoPlayer
-                videoState={room.videoState}
-                videoAssets={sceneVideos}
-                isMaster={isMaster}
-                onPlay={(data) => room.playVideo(data).catch(console.error)}
-                onPause={() => room.pauseVideo().catch(console.error)}
-                onStop={() => room.stopVideo().catch(console.error)}
-              />
-            </div>
-          ) : (vs?.url ? (
-            <div className="pointer-events-auto">
-              <VideoPlayer
-                videoState={room.videoState}
-                videoAssets={sceneVideos}
-                isMaster={false}
-                onPlay={() => {}}
-                onPause={() => {}}
-                onStop={() => {}}
-              />
-            </div>
-          ) : null)
-        })()}
+        {/* VÍDEO — jogadores só veem o painel no modo panel (cinematic/overlay = CinematicOverlay) */}
+        {!isMaster && room.videoState?.url && room.videoState.mode !== "cinematic" && room.videoState.mode !== "overlay" && (
+          <div className="pointer-events-auto">
+            <VideoPlayer
+              videoState={room.videoState}
+              videoAssets={sceneVideos}
+              isMaster={false}
+              onPlay={() => {}}
+              onPause={() => {}}
+              onStop={() => {}}
+            />
+          </div>
+        )}
 
 
         {/* Transition overlay (fade/dissolve) */}
@@ -332,16 +324,18 @@ export function SessionPage() {
         />
       )}
 
-      {/* ── CinematicOverlay — fixed, z-index acima do game ── */}
-      {(room.videoState?.mode === "cinematic" || room.videoState?.mode === "overlay") && (
-        <CinematicOverlay
-          videoState={room.videoState}
-          onDimGame={setDimGame}
-        />
-      )}
+      {/* ── CinematicOverlay — fixed, z-index acima do game ──
+          Sempre montado: o video:stop zera o mode no servidor, e desmontar aqui
+          mataria a transição de saída (e deixaria o dim preto ligado). */}
+      <CinematicOverlay
+        videoState={room.videoState}
+        onDimGame={setDimGame}
+        onEnded={isMaster ? () => room.stopVideo().catch(console.error) : undefined}
+      />
 
-      {/* ── Botão de parada para o mestre em modo cinematic/overlay (fixed, acima de tudo) ── */}
-      {isMaster && (room.videoState?.mode === "cinematic" || room.videoState?.mode === "overlay") && room.videoState?.url && (
+      {/* ── Botão de parada para o mestre — só no cinematic; no overlay nada aparece
+          na tela para preservar a imersão (parada via picker "Exibir vídeo") ── */}
+      {isMaster && room.videoState?.mode === "cinematic" && room.videoState?.url && (
         <button
           type="button"
           onClick={() => room.stopVideo().catch(console.error)}

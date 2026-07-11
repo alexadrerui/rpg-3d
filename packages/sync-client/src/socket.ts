@@ -6,7 +6,10 @@ export type RpgSocket = Socket<ServerToClientMap, ClientToServerMap>
 let socket: RpgSocket | null = null
 
 export function getSocket(serverUrl?: string): RpgSocket {
-  if (socket?.connected) return socket
+  // Reusa a instância SEMPRE (mesmo desconectada/conectando) — checar `connected`
+  // fazia cada hook montado antes do connect receber uma instância diferente:
+  // o room:join ficava num socket e dice/chat emitiam noutro (NOT_IN_ROOM).
+  if (socket) return socket
 
   const url = serverUrl ?? (
     typeof window !== "undefined"

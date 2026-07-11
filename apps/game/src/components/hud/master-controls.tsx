@@ -59,7 +59,7 @@ export function MasterControls({ activeScene, campaignId, isCombatActive, onLoad
         </button>
 
         {open && (
-          <div className="absolute bottom-full mb-1 left-0 w-full bg-neutral-800 border border-neutral-600/50 rounded-lg overflow-hidden shadow-xl z-20 max-h-48 overflow-y-auto">
+          <div className="absolute top-full mt-1 left-0 w-full bg-neutral-800 border border-neutral-600/50 rounded-lg overflow-hidden shadow-xl z-20 max-h-48 overflow-y-auto">
             {sceneList.length === 0 && (
               <p className="text-xs text-neutral-500 px-3 py-2">
                 {fetching ? "Buscando cenários..." : "Nenhum cenário criado ainda"}

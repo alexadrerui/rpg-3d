@@ -75,7 +75,15 @@ const sceneFile = {
     createdAt: now, updatedAt: now, createdBy: MASTER_ID, version: 1,
   },
   scene: { nodes, rootNodeIds: [siteId] },
-  assets: { models: [], textures: [], audio: [], videos: [] },
+  assets: {
+    models: [], textures: [], audio: [],
+    videos: [{
+      id: "cmrclk0iy00042uco8kteihg3",
+      url: "http://localhost:9000/rpg3d-assets/campaigns/cmrb6prid00042urob6isgbbp/assets/821f6f81-9d25-4e10-930d-73d31f267034.webm",
+      mimeType: "video/webm",
+      sizeBytes: 260130,
+    }],
+  },
   triggers: [
     {
       id: "trigger_spawn_seed01", type: "trigger_spawn", parentId: null, visible: true,
@@ -83,6 +91,13 @@ const sceneFile = {
       shape: { kind: "cylinder", radius: 0.5, height: 2 },
       visibility: "master_only", oneShot: false, cooldownMs: 0,
       label: "Spawn central", forRole: "any", facing: 0,
+    },
+    {
+      id: "trigger_spawn_seed02", type: "trigger_spawn", parentId: null, visible: true,
+      position: { x: 2.5, y: 0, z: 2.5 }, rotation: { x: 0, y: 0, z: 0 },
+      shape: { kind: "cylinder", radius: 0.5, height: 2 },
+      visibility: "master_only", oneShot: false, cooldownMs: 0,
+      label: "Inimigo de teste", forRole: "enemy", facing: 0,
     },
   ],
   environment: {

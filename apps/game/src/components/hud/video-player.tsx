@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react"
 import type { VideoState } from "@rpg3d/sync-client"
 import type { AssetRef, EvVideoPlay } from "@rpg3d/schema"
 import { EFFECT_LABELS } from "../../lib/transition-shaders"
+import { playWithAutoplayFallback } from "../../lib/autoplay"
 
 interface VideoPlayerProps {
   videoState:   VideoState | null
@@ -21,6 +22,7 @@ export function VideoPlayer({
   onStop,
 }: VideoPlayerProps) {
   const [showPicker, setShowPicker] = useState(false)
+  const [needsUnmute, setNeedsUnmute] = useState(false)
   const [pos, setPos]               = useState({ x: 0, y: 0 })
   const [dragging, setDragging]     = useState(false)
   const dragOffset = useRef({ x: 0, y: 0 })
@@ -34,9 +36,20 @@ export function VideoPlayer({
   useEffect(() => {
     const vid = videoRef.current
     if (!vid || !videoState || !isPanelMode) return
-    if (videoState.playing) vid.play().catch(() => {})
-    else vid.pause()
-  }, [videoState?.playing, isPanelMode])
+    if (videoState.playing) {
+      playWithAutoplayFallback(vid).then((r) => setNeedsUnmute(r !== "ok"))
+    } else {
+      vid.pause()
+    }
+  }, [videoState?.playing, videoState?.url, isPanelMode])
+
+  const handleUnmute = () => {
+    const vid = videoRef.current
+    if (!vid) return
+    vid.muted = false
+    vid.play().catch(() => {})
+    setNeedsUnmute(false)
+  }
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if (!panelRef.current) return
@@ -60,13 +73,14 @@ export function VideoPlayer({
 
   return (
     <>
-      {/* Botão do mestre quando não há vídeo ativo */}
+      {/* Botão do mestre quando não há vídeo ativo — empilhado nos controles do mestre */}
       {isMaster && !isActive && (
-        <div className="relative">
+        // Picker aberto sobe acima do vídeo overlay (z-65) — é a única forma de pará-lo
+        <div className="relative w-52" style={{ zIndex: showPicker ? 70 : undefined }}>
           <button
             type="button"
             onClick={() => setShowPicker((v) => !v)}
-            className="flex items-center gap-2 bg-neutral-950/85 hover:bg-neutral-900/90 text-neutral-400 hover:text-purple-300 text-xs font-medium px-4 py-2 rounded-full border border-neutral-700/50 hover:border-purple-900/60 transition-all backdrop-blur-sm shadow-lg"
+            className="w-full flex items-center gap-2 text-xs text-neutral-400 hover:text-purple-300 bg-neutral-800/70 hover:bg-neutral-700/70 px-3 py-1.5 rounded-lg border border-neutral-700/50 hover:border-purple-900/60 transition-colors text-left"
           >
             <span>▶</span>
             <span>Exibir vídeo</span>
@@ -77,6 +91,7 @@ export function VideoPlayer({
               videos={videoAssets}
               onSelect={(data) => { onPlay(data); setShowPicker(false) }}
               onClose={() => setShowPicker(false)}
+              onStopActive={videoState?.url ? () => { onStop(); setShowPicker(false) } : undefined}
             />
           )}
         </div>
@@ -88,9 +103,10 @@ export function VideoPlayer({
           ref={panelRef}
           className="fixed z-50 flex flex-col bg-neutral-900 border border-neutral-700/60 rounded-xl shadow-2xl overflow-hidden pointer-events-auto"
           style={{
-            width: 560,
-            transform: `translate(calc(-50% + ${pos.x}px), calc(-50% + ${pos.y}px))`,
-            top:  "50%",
+            // Abre no topo-centro para não cobrir o mapa; arrastável pelo header
+            width: "min(560px, calc(100vw - 32px))",
+            transform: `translate(calc(-50% + ${pos.x}px), ${pos.y}px)`,
+            top:  72,
             left: "50%",
           }}
         >
@@ -136,13 +152,25 @@ export function VideoPlayer({
             )}
           </div>
 
-          <video
-            ref={videoRef}
-            src={videoState.url ?? undefined}
-            controls
-            className="w-full max-h-[350px] bg-black"
-            onEnded={isMaster ? onStop : undefined}
-          />
+          <div className="relative">
+            <video
+              ref={videoRef}
+              src={videoState.url ?? undefined}
+              controls
+              className="w-full max-h-[350px] bg-black"
+              onEnded={isMaster ? onStop : undefined}
+            />
+            {needsUnmute && (
+              <button
+                type="button"
+                onClick={handleUnmute}
+                className="absolute top-2 left-1/2 -translate-x-1/2 flex items-center gap-1.5 bg-neutral-950/85 hover:bg-neutral-900 text-neutral-200 text-xs px-3 py-1.5 rounded-full border border-neutral-600/60 shadow-lg backdrop-blur-sm transition-colors"
+              >
+                <span>🔊</span>
+                <span>Ativar som</span>
+              </button>
+            )}
+          </div>
         </div>
       )}
     </>
@@ -175,10 +203,13 @@ function VideoPicker({
   videos,
   onSelect,
   onClose,
+  onStopActive,
 }: {
   videos:   AssetRef[]
   onSelect: (data: EvVideoPlay) => void
   onClose:  () => void
+  /** Presente quando há um vídeo em reprodução (overlay não tem controles na tela) */
+  onStopActive?: () => void
 }) {
   const [mode, setMode]                       = useState<ModeValue>("panel")
   const [transitionIn, setTransitionIn]       = useState<EffectValue>("fade")
@@ -195,13 +226,25 @@ function VideoPicker({
   }
 
   return (
-    <div className="absolute bottom-full mb-2 left-0 w-[320px] bg-neutral-900 border border-neutral-700/60 rounded-xl shadow-2xl overflow-hidden z-50 pointer-events-auto">
+    <div className="absolute top-full mt-2 left-0 w-[320px] max-w-[calc(100vw-32px)] bg-neutral-900 border border-neutral-700/60 rounded-xl shadow-2xl overflow-hidden z-50 pointer-events-auto">
 
       {/* Header */}
       <div className="px-3 py-2 border-b border-neutral-800 flex items-center justify-between">
         <span className="text-[11px] text-neutral-400 uppercase tracking-wide">Exibir vídeo</span>
         <button type="button" onClick={onClose} className="text-neutral-600 hover:text-neutral-300 text-sm">✕</button>
       </div>
+
+      {/* Vídeo em reprodução — única forma de interromper um overlay */}
+      {onStopActive && (
+        <button
+          type="button"
+          onClick={onStopActive}
+          className="w-full flex items-center gap-2 px-3 py-2 text-left text-xs text-red-400/90 hover:text-red-300 hover:bg-red-950/30 border-b border-neutral-800/50 transition-colors"
+        >
+          <span>■</span>
+          <span>Parar vídeo em reprodução</span>
+        </button>
+      )}
 
       {/* Modo de exibição */}
       <div className="px-3 py-2 border-b border-neutral-800/50 space-y-2">
@@ -308,6 +351,15 @@ function VideoPicker({
       {mode === "overlay" && (
         <div className="px-3 py-2 border-b border-neutral-800/50 space-y-2">
           <p className="text-[10px] text-neutral-500 uppercase tracking-wide">Overlay</p>
+          <div className="rounded-lg bg-amber-950/40 border border-amber-900/40 px-2.5 py-2">
+            <p className="text-[10px] text-amber-300/90 leading-relaxed">
+              <span className="font-medium">Modo imersivo:</span> durante a reprodução
+              nenhum botão ou título aparece na tela — nem para você. O vídeo encerra
+              sozinho ao terminar; para interromper antes, clique em "Exibir vídeo"
+              (fica neste mesmo lugar, mesmo se o vídeo o cobrir) e use
+              "Parar vídeo em reprodução".
+            </p>
+          </div>
           <div>
             <label className="text-[9px] text-neutral-600 block mb-1">Opacidade: {Math.round(overlayOpacity * 100)}%</label>
             <input
